@@ -1,0 +1,205 @@
+// User Types
+export interface User {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  role: 'admin' | 'manager' | 'staff';
+}
+
+// Product Types
+export interface Product {
+  id: string;
+  name: string;
+  description: string;
+  barcode?: string;
+  categoryId: string;
+  typeId: string;
+  locationId: string;
+  providerId?: string; // Optional provider
+  quantity: number;
+  minQuantity: number;
+  price: number;
+  cost?: number; // Optional cost price
+  lastCost?: number; // For price change tracking
+  vatPercentage: number; // VAT percentage
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ProductCategory {
+  id: string;
+  name: string;
+  description: string;
+  default?: boolean; // Add default property
+  createdAt: Date;
+}
+
+export interface ProductType {
+  id: string;
+  name: string;
+  description: string;
+  default?: boolean; // Add default property
+  createdAt: Date;
+}
+
+export interface Location {
+  id: string;
+  name: string;
+  description: string;
+  default?: boolean; // Add default property
+  createdAt: Date;
+}
+
+// Provider Types
+export interface Provider {
+  id: string;
+  name: string;
+  description: string;
+  website?: string; // Optional website field
+  phoneNumber?: string; // Optional phone number field
+  createdAt: Date;
+}
+
+// Price History Type
+export interface PriceHistory {
+  id?: string;
+  productId: string;
+  oldCost: number;
+  newCost: number;
+  changeDate: Date;
+  userId: string;
+  userName: string;
+  providerId: string;
+  providerName: string;
+  changePercentage: number;
+}
+
+// Dashboard Types
+export interface DashboardStats {
+  totalProducts: number;
+  totalValue: number;
+  totalSellingValue?: number;
+  profitMargin?: number;
+  lowStockItems: number;
+  categoriesCount: number;
+}
+
+export interface LowStockAlert {
+  id: string;
+  productId: string;
+  productName: string;
+  currentQuantity: number;
+  minQuantity: number;
+  locationName: string;
+}
+
+// Activity Log Types
+export type ActivityType = 'added' | 'removed' | 'updated' | 'deleted';
+export type ActivityEntityType = 'product' | 'category' | 'location' | 'productType' | 'provider' | 'order';
+
+export interface ActivityLog {
+  id: string;
+  type: ActivityType;
+  entityType: ActivityEntityType;
+  entityId: string;
+  entityName: string;
+  quantity?: number | null;
+  date: Date;
+  userId: string;
+  userName: string;
+}
+
+// Auth Context Types
+export interface AuthContextType {
+  currentUser: User | null;
+  loading: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string, displayName: string) => Promise<void>;
+  logout: () => Promise<void>;
+}
+
+// Order Types
+export interface OrderItem {
+  id: string;
+  productId: string;
+  productName: string;
+  quantity: number;
+  price: number;
+  total: number;
+}
+
+// New interface for unidentified WooCommerce items
+export interface UnidentifiedItem {
+  wcProductId: number;
+  sku: string;
+  name: string;
+  price: number;
+  quantity: number;
+  total: number;
+}
+
+export interface Address {
+  firstName: string;
+  lastName: string;
+  company?: string;
+  address1: string;
+  address2?: string;
+  city: string;
+  state: string;
+  postcode: string;
+  country: string;
+  email?: string;
+  phone?: string;
+}
+
+export interface Order {
+  id: string;
+  orderNumber: string;
+  customerId?: string;
+  customerName: string;
+  customerEmail?: string;
+  orderDate: Date;
+  status: OrderStatus;
+  items: OrderItem[];
+  unidentifiedItems?: UnidentifiedItem[]; // Added property for unidentified items from WooCommerce
+  shippingAddress: Address;
+  billingAddress: Address;
+  subtotal: number;
+  shippingCost: number;
+  tax: number;
+  total: number;
+  paymentMethod: string;
+  notes?: string;
+  source: 'manual' | 'woocommerce';
+  woocommerceId?: number;
+  createdAt: Date;
+  updatedAt: Date;
+  packingSlipPrinted: boolean;
+  fulfilledAt?: Date;
+  fulfilledBy?: string;
+  hasUnidentifiedItems?: boolean; // Flag to quickly check if order has unidentified items
+}
+
+export type OrderStatus = 
+  | 'pending' 
+  | 'processing' 
+  | 'on-hold' 
+  | 'completed' 
+  | 'cancelled' 
+  | 'refunded' 
+  | 'failed'
+  | 'preluata'
+  | 'impachetata'
+  | 'expediata'
+  | 'returnata'
+  | 'refuzata';
+
+export interface OrderFilterOptions {
+  status?: OrderStatus;
+  dateRange?: {
+    start: Date;
+    end: Date;
+  };
+  source?: 'manual' | 'woocommerce' | 'all';
+  search?: string;
+}

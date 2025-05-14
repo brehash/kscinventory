@@ -192,8 +192,26 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
       
       // Check for barcode match first
       const productsRef = collection(db, 'products');
-      const barcodeQuery = query(productsRef, where('barcode', '==', searchQuery));
-      const barcodeSnapshot = await getDocs(barcodeQuery);
+      
+      // Try with the original barcode
+      let barcodeSnapshot = await getDocs(query(productsRef, where('barcode', '==', searchQuery)));
+      
+      // If no match found and the query looks like a barcode (numeric), 
+      // try adding a leading zero
+      if (barcodeSnapshot.empty && /^\d+$/.test(searchQuery)) {
+        // If the barcode doesn't start with 0, try adding it
+        if (!searchQuery.startsWith('0')) {
+          const withLeadingZero = `0${searchQuery}`;
+          console.log(`No match found for ${searchQuery}, trying with leading zero: ${withLeadingZero}`);
+          barcodeSnapshot = await getDocs(query(productsRef, where('barcode', '==', withLeadingZero)));
+        } 
+        // If the barcode starts with 0, try removing it
+        else if (searchQuery.startsWith('0') && searchQuery.length > 1) {
+          const withoutLeadingZero = searchQuery.substring(1);
+          console.log(`No match found for ${searchQuery}, trying without leading zero: ${withoutLeadingZero}`);
+          barcodeSnapshot = await getDocs(query(productsRef, where('barcode', '==', withoutLeadingZero)));
+        }
+      }
       
       if (!barcodeSnapshot.empty) {
         const productData = barcodeSnapshot.docs[0].data() as Product;
@@ -324,6 +342,11 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
       setError('An error occurred while searching. Please try again.');
     } finally {
       setIsLoading(false);
+      // Clear the search input
+      if (searchInputRef.current) {
+        searchInputRef.current.value = '';
+      }
+      setSearchQuery('');
     }
   };
   

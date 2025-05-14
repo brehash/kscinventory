@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { ProductCategory, Location, Provider } from '../../types';
-import { Search, Filter, X } from 'lucide-react';
+import { Search, Filter } from 'lucide-react';
 
 interface ProductListFiltersProps {
   searchQuery: string;
@@ -29,30 +29,6 @@ const ProductListFilters: React.FC<ProductListFiltersProps> = ({
   locations,
   providers
 }) => {
-  const [tempSearchQuery, setTempSearchQuery] = useState(searchQuery);
-
-  // Initialize tempSearchQuery with searchQuery
-  useEffect(() => {
-    setTempSearchQuery(searchQuery);
-  }, [searchQuery]);
-
-  // Handle search input change
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setTempSearchQuery(value);
-    
-    // Only update the actual search query if it's at least 3 chars or empty
-    if (value.trim().length >= 3 || value.trim() === '') {
-      setSearchQuery(value);
-    }
-  };
-
-  // Clear search input
-  const handleClearSearch = () => {
-    setTempSearchQuery('');
-    setSearchQuery('');
-  };
-
   return (
     <div className="p-3 sm:p-4 border-b border-gray-200">
       <div className="flex flex-col md:flex-row gap-3 sm:gap-4">
@@ -62,24 +38,11 @@ const ProductListFilters: React.FC<ProductListFiltersProps> = ({
           </div>
           <input
             type="text"
-            placeholder="Search products (min. 3 chars)..."
-            value={tempSearchQuery}
-            onChange={handleSearchChange}
-            className="block w-full pl-9 sm:pl-10 pr-9 sm:pr-10 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            placeholder="Search products..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="block w-full pl-9 sm:pl-10 pr-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           />
-          {tempSearchQuery && (
-            <button
-              onClick={handleClearSearch}
-              className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
-            >
-              <X className="h-4 w-4 sm:h-5 sm:w-5" />
-            </button>
-          )}
-          {tempSearchQuery && tempSearchQuery.length < 3 && tempSearchQuery.length > 0 && (
-            <div className="mt-1 text-xs text-amber-600">
-              Please enter at least 3 characters to search
-            </div>
-          )}
         </div>
         
         <div className="flex flex-col sm:flex-row gap-2">

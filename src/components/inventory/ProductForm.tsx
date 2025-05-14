@@ -66,7 +66,26 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, onSubmit, onCanc
   const [locationError, setLocationError] = useState<string | null>(null);
   const [providerError, setProviderError] = useState<string | null>(null);
   
-  
+  // Update form data when initialData changes
+  useEffect(() => {
+    if (initialData) {
+      console.log('Setting form data from initialData:', initialData);
+      setFormData({
+        name: initialData.name || formData.name,
+        description: initialData.description || formData.description,
+        barcode: initialData.barcode || formData.barcode,
+        categoryId: initialData.categoryId || formData.categoryId,
+        typeId: initialData.typeId || formData.typeId,
+        locationId: initialData.locationId || formData.locationId,
+        providerId: initialData.providerId || formData.providerId,
+        quantity: initialData.quantity !== undefined ? initialData.quantity : formData.quantity,
+        minQuantity: initialData.minQuantity !== undefined ? initialData.minQuantity : formData.minQuantity,
+        price: initialData.price !== undefined ? initialData.price : formData.price,
+        cost: initialData.cost !== undefined ? initialData.cost : formData.cost,
+        vatPercentage: initialData.vatPercentage !== undefined ? initialData.vatPercentage : formData.vatPercentage,
+      });
+    }
+  }, [initialData]);
   
   useEffect(() => {
     const fetchData = async () => {
@@ -147,27 +166,6 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, onSubmit, onCanc
     
     fetchData();
   }, []);
-
-  // Update form data when initialData changes
-  useEffect(() => {
-    if (initialData) {
-      console.log('Setting form data from initialData:', initialData);
-      setFormData({
-        name: initialData.name || formData.name,
-        description: initialData.description || formData.description,
-        barcode: initialData.barcode || formData.barcode,
-        categoryId: initialData.categoryId || formData.categoryId,
-        typeId: initialData.typeId || formData.typeId,
-        locationId: initialData.locationId || formData.locationId,
-        providerId: initialData.providerId || formData.providerId,
-        quantity: initialData.quantity !== undefined ? initialData.quantity : formData.quantity,
-        minQuantity: initialData.minQuantity !== undefined ? initialData.minQuantity : formData.minQuantity,
-        price: initialData.price !== undefined ? initialData.price : formData.price,
-        cost: initialData.cost !== undefined ? initialData.cost : formData.cost,
-        vatPercentage: initialData.vatPercentage !== undefined ? initialData.vatPercentage : formData.vatPercentage,
-      });
-    }
-  }, [initialData]);
   
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;

@@ -13,7 +13,8 @@ import {
   Square,
   Package,
   Check,
-  Truck
+  Truck,
+  Info
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useReactToPrint } from 'react-to-print';
@@ -60,6 +61,11 @@ const GlobalPackingSlip: React.FC = () => {
     success: number;
     failed: number;
     failedOrderIds: string[];
+    productUpdates?: {
+      success: number;
+      failed: number;
+      insufficientStock: { productName: string; needed: number; available: number }[];
+    };
   }>({
     success: 0,
     failed: 0,
@@ -277,6 +283,69 @@ const GlobalPackingSlip: React.FC = () => {
       setIsPrinting(false);
     }
   });
+
+  // Update product quantities for an order
+  const updateProductQuantities = async (order: Order) => {
+    if (!currentUser) return { success: 0, failed: 0, insufficientStock: [] };
+
+    const results = {
+      success: 0,
+      failed: 0,
+      insufficientStock: [] as { productName: string; needed: number; available: number }[]
+    };
+
+    // Process each order item
+    for (const item of order.items) {
+      try {
+        // Get the current product data
+        const productRef = doc(db, 'products', item.productId);
+        const productDoc = await getDoc(productRef);
+        
+        if (!productDoc.exists()) {
+          results.failed++;
+          continue;
+        }
+        
+        const productData = productDoc.data() as Product;
+        
+        // Check if we have enough stock
+        if (productData.quantity < item.quantity) {
+          // Not enough stock
+          results.insufficientStock.push({
+            productName: item.productName,
+            needed: item.quantity,
+            available: productData.quantity
+          });
+          results.failed++;
+          continue;
+        }
+        
+        // Update the product quantity
+        const newQuantity = productData.quantity - item.quantity;
+        await updateDoc(productRef, {
+          quantity: newQuantity,
+          updatedAt: new Date()
+        });
+        
+        // Log the activity
+        await logActivity(
+          'removed',
+          'product',
+          item.productId,
+          item.productName,
+          currentUser,
+          item.quantity
+        );
+        
+        results.success++;
+      } catch (error) {
+        console.error(`Error updating product ${item.productId}:`, error);
+        results.failed++;
+      }
+    }
+    
+    return results;
+  };
   
   // Update order statuses for marked orders
   const updateMarkedOrders = async () => {
@@ -297,7 +366,12 @@ const GlobalPackingSlip: React.FC = () => {
       const results = {
         success: 0,
         failed: 0,
-        failedOrderIds: [] as string[]
+        failedOrderIds: [] as string[],
+        productUpdates: {
+          success: 0,
+          failed: 0,
+          insufficientStock: [] as { productName: string; needed: number; available: number }[]
+        }
       };
       
       // Update each order
@@ -314,36 +388,55 @@ const GlobalPackingSlip: React.FC = () => {
           }
           
           const orderData = orderSnap.data() as Order;
+          const order = { ...orderData, id: orderId };
+
+          // Update product quantities first
+          const productUpdateResults = await updateProductQuantities(order);
           
-          // Update order status in Firestore
-          await updateDoc(orderRef, {
-            status: 'impachetata',
-            updatedAt: new Date()
-          });
+          // Accumulate product update results
+          results.productUpdates.success += productUpdateResults.success;
+          results.productUpdates.failed += productUpdateResults.failed;
+          results.productUpdates.insufficientStock = [
+            ...results.productUpdates.insufficientStock,
+            ...productUpdateResults.insufficientStock
+          ];
           
-          // Update order status in WooCommerce if it's a WooCommerce order
-          if (orderData.source === 'woocommerce' && orderData.woocommerceId) {
-            const wooResult = await updateOrderStatusOnWooCommerce(
-              orderData.woocommerceId,
-              'impachetata'
+          // Only proceed with order update if there's sufficient stock for all items
+          if (productUpdateResults.insufficientStock.length === 0) {
+            // Update order status in Firestore
+            await updateDoc(orderRef, {
+              status: 'impachetata',
+              updatedAt: new Date()
+            });
+            
+            // Update order status in WooCommerce if it's a WooCommerce order
+            if (orderData.source === 'woocommerce' && orderData.woocommerceId) {
+              const wooResult = await updateOrderStatusOnWooCommerce(
+                orderData.woocommerceId,
+                'impachetata'
+              );
+              
+              if (!wooResult.success) {
+                console.error(`Error updating WooCommerce order ${orderData.woocommerceId}:`, wooResult.error);
+                // We still consider this a success since Firestore was updated
+              }
+            }
+            
+            // Log the activity
+            await logActivity(
+              'updated',
+              'order',
+              orderId,
+              `Order #${orderData.orderNumber}`,
+              currentUser
             );
             
-            if (!wooResult.success) {
-              console.error(`Error updating WooCommerce order ${orderData.woocommerceId}:`, wooResult.error);
-              // We still consider this a success since Firestore was updated
-            }
+            results.success++;
+          } else {
+            // Mark as failed if there was insufficient stock
+            results.failed++;
+            results.failedOrderIds.push(orderId);
           }
-          
-          // Log the activity
-          await logActivity(
-            'updated',
-            'order',
-            orderId,
-            `Order #${orderData.orderNumber}`,
-            currentUser
-          );
-          
-          results.success++;
         } catch (error) {
           console.error(`Error updating order ${orderId}:`, error);
           results.failed++;
@@ -734,6 +827,10 @@ const GlobalPackingSlip: React.FC = () => {
           <p className="text-sm text-gray-500">
             Select orders that have been packed and update their status
           </p>
+          <div className="mt-2 text-xs text-indigo-600 flex items-center">
+            <Info className="h-3.5 w-3.5 mr-1" />
+            <span>This action will decrease product quantities in inventory</span>
+          </div>
         </div>
         <button
           onClick={updateMarkedOrders}
@@ -764,6 +861,11 @@ const GlobalPackingSlip: React.FC = () => {
               <p className="text-sm text-green-700">
                 Successfully updated {updateResults.success} order{updateResults.success !== 1 ? 's' : ''} to "impachetata" status
               </p>
+              {updateResults.productUpdates && (
+                <p className="text-sm text-green-700 mt-1">
+                  Updated quantities for {updateResults.productUpdates.success} product{updateResults.productUpdates.success !== 1 ? 's' : ''}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -779,6 +881,18 @@ const GlobalPackingSlip: React.FC = () => {
               <p className="text-sm text-red-700">
                 Failed to update {updateResults.failed} order{updateResults.failed !== 1 ? 's' : ''}
               </p>
+              {updateResults.productUpdates?.insufficientStock && updateResults.productUpdates.insufficientStock.length > 0 && (
+                <div className="mt-2">
+                  <p className="text-sm font-medium text-red-700">Insufficient stock for:</p>
+                  <ul className="list-disc pl-5 mt-1 text-sm text-red-700">
+                    {updateResults.productUpdates.insufficientStock.map((item, index) => (
+                      <li key={index}>
+                        {item.productName} (needed: {item.needed}, available: {item.available})
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           </div>
         </div>

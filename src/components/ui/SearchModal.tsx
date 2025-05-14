@@ -99,6 +99,7 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (modalRef.current && !modalRef.current.contains(event.target as Node)) {
+        resetAllStates();
         onClose();
       }
     };
@@ -111,21 +112,28 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [isOpen, onClose]);
+
+  // Function to reset all states
+  const resetAllStates = () => {
+    setSearchQuery('');
+    setSearchResults([]);
+    setError(null);
+    setActiveIndex(-1);
+    setIsBarcodeMatch(false);
+    setProductToUpdate(null);
+    setShowProductModal(false);
+    setStatusMessage(null);
+    setIsProductNotFound(false);
+    setScannedBarcode('');
+    if (searchInputRef.current) {
+      searchInputRef.current.value = '';
+    }
+  };
   
   // Reset state when modal closes
   useEffect(() => {
     if (!isOpen) {
-      setSearchQuery('');
-      setSearchResults([]);
-      setError(null);
-      setActiveIndex(-1);
-      setIsBarcodeMatch(false);
-      setProductToUpdate(null);
-      setShowProductModal(false);
-      setStatusMessage(null);
-      setMode('inventory'); // Reset to default mode
-      setIsProductNotFound(false);
-      setScannedBarcode('');
+      resetAllStates();
     }
   }, [isOpen]);
   
@@ -135,6 +143,7 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
       if (!isOpen) return;
       
       if (e.key === 'Escape') {
+        resetAllStates();
         onClose();
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -146,21 +155,20 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
         setActiveIndex(prev => (prev > 0 ? prev - 1 : prev));
       } else if (e.key === 'Enter') {
         if (activeIndex >= 0 && activeIndex < searchResults.length) {
-          handleResultClick(searchResults[activeIndex]);
+          const result = searchResults[activeIndex];
+          handleResultClick(result);
         } else if (isBarcodeMatch && productToUpdate) {
           // Navigate to product details if it's a barcode match in inventory mode
           if (mode === 'inventory') {
             navigate(`/products/${productToUpdate.id}`);
+            resetAllStates();
             onClose();
           } else {
             // In shipping/receiving mode, perform the quantity update
             updateProductQuantity();
           }
         }
-        
       }
-
-      
     };
     
     window.addEventListener('keydown', handleKeyDown);
@@ -197,19 +205,25 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
       let barcodeSnapshot = await getDocs(query(productsRef, where('barcode', '==', searchQuery)));
       
       // If no match found and the query looks like a barcode (numeric), 
-      // try adding a leading zero
+      // try adding/removing a leading zero
       if (barcodeSnapshot.empty && /^\d+$/.test(searchQuery)) {
         // If the barcode doesn't start with 0, try adding it
         if (!searchQuery.startsWith('0')) {
           const withLeadingZero = `0${searchQuery}`;
           console.log(`No match found for ${searchQuery}, trying with leading zero: ${withLeadingZero}`);
-          barcodeSnapshot = await getDocs(query(productsRef, where('barcode', '==', withLeadingZero)));
+          const leadingZeroSnapshot = await getDocs(query(productsRef, where('barcode', '==', withLeadingZero)));
+          if (!leadingZeroSnapshot.empty) {
+            barcodeSnapshot = leadingZeroSnapshot;
+          }
         } 
         // If the barcode starts with 0, try removing it
         else if (searchQuery.startsWith('0') && searchQuery.length > 1) {
           const withoutLeadingZero = searchQuery.substring(1);
           console.log(`No match found for ${searchQuery}, trying without leading zero: ${withoutLeadingZero}`);
-          barcodeSnapshot = await getDocs(query(productsRef, where('barcode', '==', withoutLeadingZero)));
+          const withoutZeroSnapshot = await getDocs(query(productsRef, where('barcode', '==', withoutLeadingZero)));
+          if (!withoutZeroSnapshot.empty) {
+            barcodeSnapshot = withoutZeroSnapshot;
+          }
         }
       }
       
@@ -362,15 +376,7 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
   // Handle mode change
   const handleModeChange = (newMode: ModalMode) => {
     setMode(newMode);
-    setSearchQuery(''); // Clear search when switching modes
-    if (searchInputRef.current) {
-      searchInputRef.current.value = ''; // Clear input field value
-    }
-    setSearchResults([]);
-    setProductToUpdate(null);
-    setShowProductModal(false);
-    setStatusMessage(null);
-    setIsProductNotFound(false);
+    resetAllStates();
     
     // Set default adjustment amount based on mode
     setAdjustmentAmount(1);
@@ -385,10 +391,10 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
     switch (result.type) {
       case 'product':
         if (mode === 'inventory') {
-          navigate(`/products/${result.id}`);
-          // Reset states before closing to prevent issues with subsequent searches
-          setIsBarcodeMatch(false);
-          setProductToUpdate(null);
+          // Reset states before navigating to prevent issues with subsequent searches
+          const productId = result.id;
+          resetAllStates();
+          navigate(`/products/${productId}`);
           onClose();
         } else {
           // In shipping/receiving modes, fetch the product and show the quantity modal
@@ -397,18 +403,21 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
         break;
       case 'category':
         if (mode === 'inventory') {
+          resetAllStates();
           navigate('/settings/categories');
           onClose();
         }
         break;
       case 'location':
         if (mode === 'inventory') {
+          resetAllStates();
           navigate('/settings/locations');
           onClose();
         }
         break;
       case 'productType':
         if (mode === 'inventory') {
+          resetAllStates();
           navigate('/settings/product-types');
           onClose();
         }
@@ -564,12 +573,7 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
       setStatusMessage(successMessage);
       
       // Clear form after successful update
-      setSearchQuery('');
-      if (searchInputRef.current) {
-        searchInputRef.current.value = '';
-      }
-      setShowProductModal(false);
-      setProductToUpdate(null);
+      resetAllStates();
       
       // Clear status message after 3 seconds
       setTimeout(() => {
@@ -653,6 +657,7 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
   };
   
   const handleCreateProduct = () => {
+    resetAllStates();
     navigate(`/products/new?barcode=${encodeURIComponent(scannedBarcode)}`);
     onClose();
   };
@@ -662,11 +667,24 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div className="flex min-h-screen items-center justify-center p-2 sm:p-4 text-center">
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={onClose}></div>
-        
+        {/* Background overlay */}
+        <div 
+          className="fixed inset-0 transition-opacity" 
+          aria-hidden="true"
+          onClick={() => {
+            resetAllStates();
+            onClose();
+          }}
+        >
+          <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
+        </div>
+
+        {/* Modal panel */}
+        <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
         <div 
           ref={modalRef}
-          className="w-full max-w-md sm:max-w-2xl transform overflow-hidden rounded-lg bg-white text-left align-middle shadow-xl transition-all"
+          className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle w-full sm:max-w-2xl sm:w-full"
+          onClick={(e) => e.stopPropagation()}
         >
           {/* Mode Selection */}
           <div className="flex border-b border-gray-200">
@@ -984,10 +1002,10 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
               <div className="mt-4 flex justify-between">
                 <button
                   onClick={() => {
-                    navigate(`/products/${productToUpdate.id}`);
-                    // Reset states before closing to prevent issues with subsequent searches
-                    setIsBarcodeMatch(false);
-                    setProductToUpdate(null);
+                    // Reset states before navigating to prevent issues with subsequent searches
+                    const productId = productToUpdate.id;
+                    resetAllStates();
+                    navigate(`/products/${productId}`);
                     onClose();
                   }}
                   className="inline-flex items-center rounded border border-gray-300 bg-white px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-50"

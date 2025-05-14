@@ -2,24 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { collection, getDocs, query, orderBy, where, deleteDoc, doc, addDoc, updateDoc, getDoc, limit, startAfter, getCountFromServer } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { Product, ProductCategory, Location, ProductType, Provider, PriceHistory } from '../../types';
-import { 
-  Search, 
-  Plus, 
-  Filter, 
-  ArrowUp, 
-  ArrowDown, 
-  Edit, 
-  Trash,
-  AlertTriangle,
-  ChevronLeft,
-  ChevronRight
-} from 'lucide-react';
+import { Plus } from 'lucide-react';
 import Modal from '../ui/Modal';
 import ProductForm from './ProductForm';
 import { useAuth } from '../auth/AuthProvider';
 import { logActivity } from '../../utils/activityLogger';
-import { Link } from 'react-router-dom';
-import ReactPaginate from 'react-paginate';
+import { useNavigate } from 'react-router-dom';
+
+// Import sub-components
+import ProductListFilters from './ProductListFilters';
+import ProductTable from './ProductTable';
+import ProductPagination from './ProductPagination';
+import ProductDeleteConfirmation from './ProductDeleteConfirmation';
 
 const ProductList: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -51,6 +45,7 @@ const ProductList: React.FC = () => {
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
 
   const { currentUser } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -470,309 +465,43 @@ const ProductList: React.FC = () => {
       </div>
       
       <div className="bg-white rounded-lg shadow-sm">
-        <div className="p-3 sm:p-4 border-b border-gray-200">
-          <div className="flex flex-col md:flex-row gap-3 sm:gap-4">
-            <div className="relative flex-1">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" />
-              </div>
-              <input
-                type="text"
-                placeholder="Search products..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="block w-full pl-9 sm:pl-10 pr-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              />
-            </div>
-            
-            <div className="flex flex-col sm:flex-row gap-2">
-              <div className="relative inline-block w-full sm:w-auto">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Filter className="h-3 w-3 sm:h-4 sm:w-4 text-gray-400" />
-                </div>
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="pl-8 sm:pl-9 pr-3 py-1.5 sm:py-2 text-xs sm:text-sm w-full border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                >
-                  <option value="">All Categories</option>
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.id}>{category.name}</option>
-                  ))}
-                </select>
-              </div>
-              
-              <div className="relative inline-block w-full sm:w-auto">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Filter className="h-3 w-3 sm:h-4 sm:w-4 text-gray-400" />
-                </div>
-                <select
-                  value={selectedLocation}
-                  onChange={(e) => setSelectedLocation(e.target.value)}
-                  className="pl-8 sm:pl-9 pr-3 py-1.5 sm:py-2 text-xs sm:text-sm w-full border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                >
-                  <option value="">All Locations</option>
-                  {locations.map((location) => (
-                    <option key={location.id} value={location.id}>{location.name}</option>
-                  ))}
-                </select>
-              </div>
-              
-              <div className="relative inline-block w-full sm:w-auto">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Filter className="h-3 w-3 sm:h-4 sm:w-4 text-gray-400" />
-                </div>
-                <select
-                  value={selectedProvider}
-                  onChange={(e) => setSelectedProvider(e.target.value)}
-                  className="pl-8 sm:pl-9 pr-3 py-1.5 sm:py-2 text-xs sm:text-sm w-full border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                >
-                  <option value="">All Providers</option>
-                  {providers.map((provider) => (
-                    <option key={provider.id} value={provider.id}>{provider.name}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* Filter controls */}
+        <ProductListFilters 
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          selectedCategory={selectedCategory}
+          setSelectedCategory={setSelectedCategory}
+          selectedLocation={selectedLocation}
+          setSelectedLocation={setSelectedLocation}
+          selectedProvider={selectedProvider}
+          setSelectedProvider={setSelectedProvider}
+          categories={categories}
+          locations={locations}
+          providers={providers}
+        />
         
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th 
-                  scope="col" 
-                  className="px-4 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  onClick={() => handleSort('name')}
-                >
-                  <div className="flex items-center">
-                    <span>Name</span>
-                    {sortField === 'name' && (
-                      sortDirection === 'asc' ? 
-                      <ArrowUp className="h-3 w-3 sm:h-4 sm:w-4 ml-1" /> : 
-                      <ArrowDown className="h-3 w-3 sm:h-4 sm:w-4 ml-1" />
-                    )}
-                  </div>
-                </th>
-                <th 
-                  scope="col" 
-                  className="hidden sm:table-cell px-4 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  onClick={() => handleSort('barcode')}
-                >
-                  <div className="flex items-center">
-                    <span>Barcode</span>
-                    {sortField === 'barcode' && (
-                      sortDirection === 'asc' ? 
-                      <ArrowUp className="h-3 w-3 sm:h-4 sm:w-4 ml-1" /> : 
-                      <ArrowDown className="h-3 w-3 sm:h-4 sm:w-4 ml-1" />
-                    )}
-                  </div>
-                </th>
-                <th 
-                  scope="col" 
-                  className="hidden md:table-cell px-4 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                >
-                  Category
-                </th>
-                <th 
-                  scope="col" 
-                  className="hidden md:table-cell px-4 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                >
-                  Location
-                </th>
-                <th 
-                  scope="col" 
-                  className="hidden lg:table-cell px-4 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                >
-                  Provider
-                </th>
-                <th 
-                  scope="col" 
-                  className="px-4 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  onClick={() => handleSort('quantity')}
-                >
-                  <div className="flex items-center">
-                    <span>Qty</span>
-                    {sortField === 'quantity' && (
-                      sortDirection === 'asc' ? 
-                      <ArrowUp className="h-3 w-3 sm:h-4 sm:w-4 ml-1" /> : 
-                      <ArrowDown className="h-3 w-3 sm:h-4 sm:w-4 ml-1" />
-                    )}
-                  </div>
-                </th>
-                <th 
-                  scope="col" 
-                  className="px-4 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  onClick={() => handleSort('price')}
-                >
-                  <div className="flex items-center">
-                    <span>Price</span>
-                    {sortField === 'price' && (
-                      sortDirection === 'asc' ? 
-                      <ArrowUp className="h-3 w-3 sm:h-4 sm:w-4 ml-1" /> : 
-                      <ArrowDown className="h-3 w-3 sm:h-4 sm:w-4 ml-1" />
-                    )}
-                  </div>
-                </th>
-                <th 
-                  scope="col" 
-                  className="hidden md:table-cell px-4 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  onClick={() => handleSort('vatPercentage')}
-                >
-                  <div className="flex items-center">
-                    <span>VAT</span>
-                    {sortField === 'vatPercentage' && (
-                      sortDirection === 'asc' ? 
-                      <ArrowUp className="h-3 w-3 sm:h-4 sm:w-4 ml-1" /> : 
-                      <ArrowDown className="h-3 w-3 sm:h-4 sm:w-4 ml-1" />
-                    )}
-                  </div>
-                </th>
-                <th scope="col" className="relative px-4 sm:px-6 py-2 sm:py-3">
-                  <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredProducts.length > 0 ? (
-                filteredProducts.map((product) => (
-                  <tr key={product.id} className="hover:bg-gray-50">
-                    <td className="px-4 sm:px-6 py-2 sm:py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div>
-                          {/* Added Link around the product name */}
-                          <Link 
-                            to={`/products/${product.id}`}
-                            className="text-xs sm:text-sm font-medium text-indigo-600 hover:text-indigo-800 hover:underline"
-                          >
-                            {product.name}
-                          </Link>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="hidden sm:table-cell px-4 sm:px-6 py-2 sm:py-4 whitespace-nowrap">
-                      <div className="text-xs sm:text-sm text-gray-500">{product.barcode || '-'}</div>
-                    </td>
-                    <td className="hidden md:table-cell px-4 sm:px-6 py-2 sm:py-4 whitespace-nowrap">
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
-                        {getCategoryName(product.categoryId)}
-                      </span>
-                    </td>
-                    <td className="hidden md:table-cell px-4 sm:px-6 py-2 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-500">
-                      {getLocationName(product.locationId)}
-                    </td>
-                    <td className="hidden lg:table-cell px-4 sm:px-6 py-2 sm:py-4 whitespace-nowrap">
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-100 text-purple-800">
-                        {product.providerId ? getProviderName(product.providerId) : 'None'}
-                      </span>
-                    </td>
-                    <td className="px-4 sm:px-6 py-2 sm:py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        {product.quantity <= product.minQuantity && (
-                          <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4 text-amber-500 mr-1" />
-                        )}
-                        <span className={`text-xs sm:text-sm ${product.quantity <= product.minQuantity ? 'text-amber-500 font-medium' : 'text-gray-500'}`}>
-                          {product.quantity}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-4 sm:px-6 py-2 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-500">
-                      {product.price.toFixed(2)} RON
-                    </td>
-                    <td className="hidden md:table-cell px-4 sm:px-6 py-2 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-500">
-                      {product.vatPercentage || 0}%
-                    </td>
-                    <td className="px-4 sm:px-6 py-2 sm:py-4 whitespace-nowrap text-right text-xs sm:text-sm font-medium">
-                      <div className="flex justify-end space-x-2">
-                        {/* Added link to product details */}
-                        <Link
-                          to={`/products/${product.id}`}
-                          className="text-indigo-600 hover:text-indigo-900"
-                          title="View details"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
-                            <circle cx="12" cy="12" r="3" />
-                          </svg>
-                        </Link>
-                        <button
-                          onClick={() => handleOpenEditModal(product)}
-                          className="text-indigo-600 hover:text-indigo-900"
-                        >
-                          <Edit className="h-4 w-4 sm:h-5 sm:w-5" />
-                        </button>
-                        <button
-                          onClick={() => confirmDelete(product)}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          <Trash className="h-4 w-4 sm:h-5 sm:w-5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={9} className="px-4 sm:px-6 py-4 text-center text-gray-500">
-                    No products found
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        {/* Product table */}
+        <ProductTable 
+          filteredProducts={filteredProducts}
+          getCategoryName={getCategoryName}
+          getLocationName={getLocationName}
+          getProductTypeName={getProductTypeName}
+          getProviderName={getProviderName}
+          sortField={sortField}
+          sortDirection={sortDirection}
+          handleSort={handleSort}
+          handleOpenEditModal={handleOpenEditModal}
+          confirmDelete={confirmDelete}
+        />
         
         {/* Pagination */}
-        {pageCount > 1 && (
-          <div className="px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
-            <div className="flex-1 flex justify-between sm:hidden">
-              <button
-                onClick={() => handlePageClick({ selected: Math.max(0, currentPage - 1) })}
-                disabled={currentPage === 0}
-                className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-              >
-                Previous
-              </button>
-              <button
-                onClick={() => handlePageClick({ selected: Math.min(pageCount - 1, currentPage + 1) })}
-                disabled={currentPage === pageCount - 1}
-                className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-              >
-                Next
-              </button>
-            </div>
-            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm text-gray-700">
-                  Showing <span className="font-medium">{filteredProducts.length > 0 ? currentPage * itemsPerPage + 1 : 0}</span> to{' '}
-                  <span className="font-medium">
-                    {Math.min((currentPage + 1) * itemsPerPage, totalProducts)}
-                  </span>{' '}
-                  of <span className="font-medium">{totalProducts}</span> products
-                </p>
-              </div>
-              <div>
-                <ReactPaginate
-                  previousLabel={<ChevronLeft className="h-5 w-5" />}
-                  nextLabel={<ChevronRight className="h-5 w-5" />}
-                  breakLabel="..."
-                  breakClassName="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700"
-                  pageCount={pageCount}
-                  marginPagesDisplayed={2}
-                  pageRangeDisplayed={5}
-                  onPageChange={handlePageClick}
-                  containerClassName="relative z-0 inline-flex rounded-md shadow-sm -space-x-px"
-                  pageClassName="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
-                  previousClassName="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
-                  nextClassName="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
-                  activeClassName="z-10 bg-indigo-50 border-indigo-500 text-indigo-600"
-                  forcePage={currentPage}
-                />
-              </div>
-            </div>
-          </div>
-        )}
+        <ProductPagination 
+          currentPage={currentPage}
+          pageCount={pageCount}
+          itemsPerPage={itemsPerPage}
+          totalProducts={totalProducts}
+          handlePageClick={handlePageClick}
+        />
       </div>
       
       {/* Add Product Modal */}
@@ -809,38 +538,12 @@ const ProductList: React.FC = () => {
       </Modal>
       
       {/* Delete confirmation modal */}
-      <Modal
+      <ProductDeleteConfirmation
         isOpen={showDeleteModal}
         onClose={() => setShowDeleteModal(false)}
-        title="Delete Product"
-      >
-        <div className="sm:flex sm:items-start">
-          <div className="mx-auto flex-shrink-0 flex items-center justify-center h-10 w-10 sm:h-10 sm:w-10 rounded-full bg-red-100 sm:mx-0">
-            <AlertTriangle className="h-5 w-5 sm:h-6 sm:w-6 text-red-600" />
-          </div>
-          <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
-            <p className="text-xs sm:text-sm text-gray-500">
-              Are you sure you want to delete {productToDelete?.name}? This action cannot be undone.
-            </p>
-          </div>
-        </div>
-        <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
-          <button
-            type="button"
-            onClick={handleDelete}
-            className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-xs sm:text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto"
-          >
-            Delete
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowDeleteModal(false)}
-            className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto"
-          >
-            Cancel
-          </button>
-        </div>
-      </Modal>
+        onDelete={handleDelete}
+        productName={productToDelete?.name}
+      />
     </div>
   );
 };

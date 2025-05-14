@@ -189,10 +189,11 @@ export type OrderStatus =
   | 'refunded' 
   | 'failed'
   | 'preluata'
-  | 'impachetata'
+  | 'pregatita'  // New status replacing 'impachetata'
   | 'expediata'
   | 'returnata'
-  | 'refuzata';
+  | 'refuzata'
+  | 'neonorata';  // New status
 
 export interface OrderFilterOptions {
   status?: OrderStatus;

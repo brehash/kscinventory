@@ -86,7 +86,77 @@ export const testWooCommerceConnection = async (
 
 // Map WooCommerce order status to internal status
 const mapOrderStatus = (wcStatus: string): OrderStatus => {
+  console.log(`Mapping WooCommerce status: ${wcStatus}`);
+  
+  // Support both standard WooCommerce statuses and custom statuses with wc- prefix
   switch (wcStatus) {
+    // Standard WooCommerce statuses
+    case 'pending':
+      return 'pending';
+    case 'processing':
+      return 'processing';
+    case 'on-hold':
+      return 'on-hold';
+    case 'completed':
+      return 'completed';
+    case 'cancelled':
+      return 'cancelled';
+    case 'refunded':
+      return 'refunded';
+    case 'failed':
+      return 'failed';
+      
+    // Custom statuses with wc- prefix  
+    case 'wc-preluata':
+      return 'preluata';
+    case 'wc-pregatita':
+      return 'pregatita';
+    case 'wc-expediata':
+      return 'expediata';
+    case 'wc-refuzata':
+      return 'refuzata';  
+    case 'wc-neonorata':
+      return 'neonorata';
+    
+    // Support for custom statuses without prefix too
+    case 'preluata':
+      return 'preluata';
+    case 'pregatita':
+      return 'pregatita';
+    case 'expediata':
+      return 'expediata';
+    case 'refuzata':
+      return 'refuzata';
+    case 'neonorata':
+      return 'neonorata';
+      
+    default:
+      console.log(`Unknown WooCommerce status: ${wcStatus}, defaulting to 'processing'`);
+      return 'processing';
+  }
+};
+
+// Map internal order status to WooCommerce status
+const mapInternalStatusToWooCommerce = (status: OrderStatus): string => {
+  console.log(`Mapping internal status to WooCommerce: ${status}`);
+  
+  switch (status) {
+    case 'preluata':
+      return 'wc-preluata';
+    case 'pregatita':
+      return 'wc-pregatita';
+    case 'expediata':
+      return 'wc-expediata';
+    case 'refuzata':
+      return 'wc-refuzata';
+    case 'neonorata':
+      return 'wc-neonorata';
+      
+    // For backward compatibility, support the old status name
+    case 'impachetata':
+      return 'wc-pregatita';
+      
+    // Standard WooCommerce statuses
     case 'pending':
       return 'pending';
     case 'processing':
@@ -102,25 +172,8 @@ const mapOrderStatus = (wcStatus: string): OrderStatus => {
     case 'failed':
       return 'failed';
     default:
-      return 'processing';
-  }
-};
-
-// Map internal order status to WooCommerce status
-const mapInternalStatusToWooCommerce = (status: OrderStatus): string => {
-  switch (status) {
-    case 'preluata':
-      return 'processing'; // Map to WooCommerce's processing
-    case 'impachetata':
-      return 'on-hold'; // Map to WooCommerce's on-hold or custom status if available
-    case 'expediata':
-      return 'completed'; // Map to WooCommerce's completed
-    case 'returnata':
-      return 'refunded'; // Map to WooCommerce's refunded
-    case 'refuzata':
-      return 'cancelled'; // Map to WooCommerce's cancelled
-    default:
-      return status; // Use the same status for standard WooCommerce statuses
+      console.log(`Unknown internal status: ${status}, defaulting to original status`);
+      return status;
   }
 };
 
@@ -144,16 +197,21 @@ export const updateOrderStatusOnWooCommerce = async (
     
     // Map the internal status to a WooCommerce status
     const wcStatus = mapInternalStatusToWooCommerce(status);
+    console.log(`Updating WooCommerce order ${woocommerceId} status to: ${wcStatus}`);
     
     // Update order status in WooCommerce
     const response = await api.put(`orders/${woocommerceId}`, {
       status: wcStatus
     });
     
+    console.log(`WooCommerce update response status: ${response.status}`);
+    
     if (response && response.status === 200) {
+      console.log(`Successfully updated WooCommerce order ${woocommerceId}`);
       return { success: true };
     }
     
+    console.error('Unexpected response when updating WooCommerce order:', response);
     return {
       success: false,
       error: 'Unexpected response from WooCommerce API'
@@ -193,6 +251,8 @@ const findProductByBarcode = async (sku: string): Promise<Product | null> => {
 
 // Convert WooCommerce order to internal Order format
 const convertWooCommerceOrder = async (wcOrder: any): Promise<Omit<Order, 'id'>> => {
+  console.log(`Converting WooCommerce order: #${wcOrder.number} (ID: ${wcOrder.id}) - Status: ${wcOrder.status}`);
+  
   // Extract customer name
   const customerName = wcOrder.billing 
     ? `${wcOrder.billing.first_name} ${wcOrder.billing.last_name}`.trim()
@@ -208,11 +268,13 @@ const convertWooCommerceOrder = async (wcOrder: any): Promise<Omit<Order, 'id'>>
   // Process each line item
   for (const item of wcOrder.line_items) {
     const sku = item.sku || '';
+    console.log(`Processing line item: "${item.name}" (SKU: ${sku}, Quantity: ${item.quantity})`);
     
     // Try to find the product by barcode (sku)
     const product = await findProductByBarcode(sku);
     
     if (product) {
+      console.log(`Found matching product in inventory for SKU ${sku}: ${product.name}`);
       // Product found in system - add it as a regular OrderItem
       items.push({
         id: item.id.toString(),
@@ -223,6 +285,7 @@ const convertWooCommerceOrder = async (wcOrder: any): Promise<Omit<Order, 'id'>>
         total: product.price * item.quantity
       });
     } else {
+      console.log(`No matching product found for SKU ${sku}, adding to unidentified items`);
       // Product not found - add to unidentifiedItems
       unidentifiedItems.push({
         wcProductId: item.product_id,
@@ -274,12 +337,16 @@ const convertWooCommerceOrder = async (wcOrder: any): Promise<Omit<Order, 'id'>>
   // Parse order date
   const orderDate = new Date(wcOrder.date_created || new Date());
   
+  // Map the status and log it
+  const mappedStatus = mapOrderStatus(wcOrder.status);
+  console.log(`Mapped WooCommerce status "${wcOrder.status}" to internal status "${mappedStatus}"`);
+  
   return {
     orderNumber: wcOrder.number,
     customerName,
     customerEmail,
     orderDate,
-    status: mapOrderStatus(wcOrder.status),
+    status: mappedStatus,
     items,
     ...(unidentifiedItems.length > 0 ? { unidentifiedItems } : {}),
     hasUnidentifiedItems: unidentifiedItems.length > 0,
@@ -302,6 +369,8 @@ const convertWooCommerceOrder = async (wcOrder: any): Promise<Omit<Order, 'id'>>
 // Sync WooCommerce orders
 export const syncWooCommerceOrders = async (currentUser: User) => {
   try {
+    console.log('Starting WooCommerce orders sync...');
+    
     // Initialize WooCommerce API
     const api = initWooCommerceAPI();
     
@@ -309,6 +378,7 @@ export const syncWooCommerceOrders = async (currentUser: User) => {
     if (!localStorage.getItem('wc_url') || 
         !localStorage.getItem('wc_consumer_key') || 
         !localStorage.getItem('wc_consumer_secret')) {
+      console.error('WooCommerce credentials not found');
       return { 
         success: false, 
         error: 'WooCommerce credentials not found. Please configure them in Settings > WooCommerce.' 
@@ -316,6 +386,7 @@ export const syncWooCommerceOrders = async (currentUser: User) => {
     }
     
     // Fetch orders from WooCommerce
+    console.log('Fetching orders from WooCommerce API...');
     const response = await api.get('orders', {
       per_page: 100, // Adjust as needed
       orderby: 'date',
@@ -323,19 +394,37 @@ export const syncWooCommerceOrders = async (currentUser: User) => {
     });
     
     if (!response || !response.data) {
+      console.error('No response from WooCommerce API');
       return { 
         success: false, 
         error: 'No response from WooCommerce API' 
       };
     }
     
+    // Log the full response in the console for debugging
+    console.log('WooCommerce API Response:', response);
+    console.log('WooCommerce Orders Data:', response.data);
+    
     const wcOrders = response.data;
+    console.log(`Retrieved ${wcOrders.length} orders from WooCommerce`);
+    
+    // Log statuses for debugging
+    const statusCounts: Record<string, number> = {};
+    wcOrders.forEach((order: any) => {
+      const status = order.status;
+      statusCounts[status] = (statusCounts[status] || 0) + 1;
+      console.log(`Order #${order.number} has WooCommerce status: ${status}`);
+    });
+    console.log('Status distribution from WooCommerce:', statusCounts);
+    
     let newOrders = 0;
     let updatedOrders = 0;
     let ordersWithUnidentifiedItems = 0;
     
     // Process each WooCommerce order
     for (const wcOrder of wcOrders) {
+      console.log(`Processing WooCommerce order #${wcOrder.number} (ID: ${wcOrder.id})`);
+      
       // Check if order already exists
       const ordersRef = collection(db, 'orders');
       const q = query(
@@ -347,6 +436,7 @@ export const syncWooCommerceOrders = async (currentUser: User) => {
       const snapshot = await getDocs(q);
       
       if (snapshot.empty) {
+        console.log(`Order #${wcOrder.number} is new, creating in Firestore`);
         // Order doesn't exist, create it
         const newOrderData = await convertWooCommerceOrder(wcOrder);
         const docRef = await addDoc(ordersRef, newOrderData);
@@ -362,6 +452,7 @@ export const syncWooCommerceOrders = async (currentUser: User) => {
         
         if (newOrderData.hasUnidentifiedItems) {
           ordersWithUnidentifiedItems++;
+          console.log(`Order #${wcOrder.number} has unidentified items`);
         }
         
         newOrders++;
@@ -369,6 +460,7 @@ export const syncWooCommerceOrders = async (currentUser: User) => {
         // Order exists, update it
         const existingOrder = snapshot.docs[0];
         const existingOrderData = existingOrder.data() as Order;
+        console.log(`Order #${wcOrder.number} already exists in Firestore with status: ${existingOrderData.status}`);
         
         // Convert WooCommerce order to our format
         const newOrderData = await convertWooCommerceOrder(wcOrder);
@@ -380,6 +472,9 @@ export const syncWooCommerceOrders = async (currentUser: User) => {
           existingOrderData.total !== newOrderData.total ||
           existingOrderData.hasUnidentifiedItems !== newOrderData.hasUnidentifiedItems
         ) {
+          console.log(`Order #${wcOrder.number} has changes, updating in Firestore`);
+          console.log(`Status change: ${existingOrderData.status} -> ${newOrderData.status}`);
+          
           const orderRef = doc(db, 'orders', existingOrder.id);
           
           // Update only what has changed
@@ -408,12 +503,17 @@ export const syncWooCommerceOrders = async (currentUser: User) => {
               (!existingOrderData.hasUnidentifiedItems || 
                JSON.stringify(existingOrderData.unidentifiedItems) !== JSON.stringify(newOrderData.unidentifiedItems))) {
             ordersWithUnidentifiedItems++;
+            console.log(`Order #${wcOrder.number} has unidentified items after update`);
           }
           
           updatedOrders++;
+        } else {
+          console.log(`Order #${wcOrder.number} has no changes, skipping update`);
         }
       }
     }
+    
+    console.log(`Sync completed: ${newOrders} new orders, ${updatedOrders} updated orders, ${ordersWithUnidentifiedItems} orders with unidentified items`);
     
     return {
       success: true,
@@ -458,6 +558,9 @@ export const wooSyncScript = async () => {
       console.error('No response from WooCommerce API');
       return;
     }
+    
+    // Log response data
+    console.log('WooCommerce API Response (Script):', response.data);
     
     const wcOrders = response.data;
     let newOrders = 0;

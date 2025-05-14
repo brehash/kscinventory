@@ -179,9 +179,9 @@ const ProductList: React.FC = () => {
       if (searchQuery) {
         const lowerCaseQuery = searchQuery.toLowerCase();
         productsData = productsData.filter(product => 
-          product.name.toLowerCase().includes(lowerCaseQuery) || 
-          (product.barcode && product.barcode.toLowerCase().includes(lowerCaseQuery)) ||
-          product.description.toLowerCase().includes(lowerCaseQuery)
+          (product.name?.toLowerCase() || '').includes(lowerCaseQuery) || 
+          (product.barcode?.toLowerCase() || '').includes(lowerCaseQuery) ||
+          (product.description?.toLowerCase() || '').includes(lowerCaseQuery)
         );
       }
       
@@ -214,9 +214,9 @@ const ProductList: React.FC = () => {
     if (searchQuery) {
       const lowerCaseQuery = searchQuery.toLowerCase();
       const filtered = products.filter(product => 
-        product.name.toLowerCase().includes(lowerCaseQuery) || 
-        (product.barcode && product.barcode.toLowerCase().includes(lowerCaseQuery)) ||
-        product.description.toLowerCase().includes(lowerCaseQuery)
+        (product.name?.toLowerCase() || '').includes(lowerCaseQuery) || 
+        (product.barcode?.toLowerCase() || '').includes(lowerCaseQuery) ||
+        (product.description?.toLowerCase() || '').includes(lowerCaseQuery)
       );
       setFilteredProducts(filtered);
     } else {

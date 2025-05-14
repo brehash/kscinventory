@@ -69,6 +69,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, onSubmit, onCanc
   // Update form data when initialData changes
   useEffect(() => {
     if (initialData) {
+      console.log('Setting form data from initialData:', initialData);
       setFormData({
         ...formData,
         ...initialData,

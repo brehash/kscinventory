@@ -1,13 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { Product } from '../../types';
-import { ArrowLeft, AlertTriangle, CheckCircle, Loader2 } from 'lucide-react';
+import { 
+  ArrowLeft, 
+  Plus, 
+  Trash,
+  AlertTriangle,
+  CheckCircle,
+  Loader2
+} from 'lucide-react';
 import ProductForm from './ProductForm';
 import { useAuth } from '../auth/AuthProvider';
 import { logActivity } from '../../utils/activityLogger';
 import { flagOrdersWithProduct } from '../../utils/orderUtils';
+
+// Helper function to generate a unique order number
+const generateOrderNumber = () => {
+  const timestamp = new Date().getTime().toString().slice(-6);
+  const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+  return `M${timestamp}${random}`;
+};
 
 const ProductCreate: React.FC = () => {
   const navigate = useNavigate();
@@ -26,7 +40,8 @@ const ProductCreate: React.FC = () => {
     const queryParams = new URLSearchParams(location.search);
     const initialProductData: Partial<Product> = {
       quantity: 1,
-      minQuantity: 1
+      minQuantity: 1,
+      vatPercentage: 19 // Default VAT in Romania
     };
     
     // Extract all possible query parameters
@@ -56,15 +71,7 @@ const ProductCreate: React.FC = () => {
       }
     }
     
-    // Set default min quantity if not specified
-    if (!initialProductData.minQuantity) {
-      initialProductData.minQuantity = 1; // Default min quantity for unidentified products
-    }
-    
-    // Set default VAT percentage if not specified
-    if (!initialProductData.vatPercentage) {
-      initialProductData.vatPercentage = 19; // Default VAT in Romania
-    }
+    console.log('URL parameters extracted:', initialProductData);
     
     // Update the initialData state with the parameters from URL
     setInitialData(initialProductData);

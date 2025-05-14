@@ -14,7 +14,9 @@ import {
   Package,
   Check,
   Truck,
-  Info
+  Info,
+  Plus,
+  Minus
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useReactToPrint } from 'react-to-print';
@@ -35,6 +37,10 @@ interface GroupedItem {
     quantity: number;
   }[];
 }
+
+// Storage keys
+const STORAGE_GROUPED_ITEMS_KEY = 'packlist_groupedItems';
+const STORAGE_MARKED_ORDERS_KEY = 'packlist_markedOrders';
 
 const GlobalPackingSlip: React.FC = () => {
   const navigate = useNavigate();
@@ -87,12 +93,43 @@ const GlobalPackingSlip: React.FC = () => {
   // Reference to hidden input for barcode scanning
   const barcodeInputRef = useRef<HTMLInputElement>(null);
   
+  // Save state to localStorage when groupedItems or markedOrders change
+  useEffect(() => {
+    if (!loading && groupedItems.length > 0) {
+      localStorage.setItem(STORAGE_GROUPED_ITEMS_KEY, JSON.stringify(groupedItems));
+    }
+  }, [groupedItems, loading]);
+
+  useEffect(() => {
+    if (!loading && Object.keys(markedOrders).length > 0) {
+      localStorage.setItem(STORAGE_MARKED_ORDERS_KEY, JSON.stringify(markedOrders));
+    }
+  }, [markedOrders, loading]);
+
   // Fetch all relevant orders (processing and preluata)
   useEffect(() => {
     const fetchOrders = async () => {
       try {
         setLoading(true);
         setError(null);
+
+        // Check if we have saved state in localStorage
+        const savedGroupedItems = localStorage.getItem(STORAGE_GROUPED_ITEMS_KEY);
+        const savedMarkedOrders = localStorage.getItem(STORAGE_MARKED_ORDERS_KEY);
+
+        if (savedGroupedItems && savedMarkedOrders) {
+          // Restore saved state
+          console.log('Restoring saved state from localStorage');
+          
+          const parsedGroupedItems = JSON.parse(savedGroupedItems) as GroupedItem[];
+          const parsedMarkedOrders = JSON.parse(savedMarkedOrders) as Record<string, boolean>;
+          
+          setGroupedItems(parsedGroupedItems);
+          setFilteredItems(parsedGroupedItems);
+          setMarkedOrders(parsedMarkedOrders);
+          
+          // Still need to fetch orders to get the full order details
+        }
         
         // Query for processing orders
         const processingQuery = query(collection(db, 'orders'), where('status', '==', 'processing'));
@@ -132,15 +169,19 @@ const GlobalPackingSlip: React.FC = () => {
         
         setOrders(ordersData);
         
-        // Create initial marked orders state
-        const initialMarkedState: Record<string, boolean> = {};
-        ordersData.forEach(order => {
-          initialMarkedState[order.id] = false;
-        });
-        setMarkedOrders(initialMarkedState);
+        // Only create initial marked orders state if we don't have one from localStorage
+        if (!savedMarkedOrders) {
+          const initialMarkedState: Record<string, boolean> = {};
+          ordersData.forEach(order => {
+            initialMarkedState[order.id] = false;
+          });
+          setMarkedOrders(initialMarkedState);
+        }
         
-        // Group items for packing
-        await groupItems(ordersData);
+        // Only group items if we don't have them from localStorage
+        if (!savedGroupedItems) {
+          await groupItems(ordersData);
+        }
         
         setLoading(false);
       } catch (error) {
@@ -175,6 +216,12 @@ const GlobalPackingSlip: React.FC = () => {
     
     setFilteredItems(filtered);
   }, [searchName, groupedItems]);
+  
+  // Clear localStorage function
+  const clearSavedState = () => {
+    localStorage.removeItem(STORAGE_GROUPED_ITEMS_KEY);
+    localStorage.removeItem(STORAGE_MARKED_ORDERS_KEY);
+  };
   
   // Group items from all orders
   const groupItems = async (ordersData: Order[]) => {
@@ -294,7 +341,14 @@ const GlobalPackingSlip: React.FC = () => {
         };
         
         setGroupedItems(updatedItems);
-        setFilteredItems(updatedItems); // Update filtered items as well
+        setFilteredItems(
+          searchName ? 
+            updatedItems.filter(item => 
+              item.productName.toLowerCase().includes(searchName.toLowerCase()) ||
+              (item.barcode && item.barcode.toLowerCase().includes(searchName.toLowerCase()))
+            ) : 
+            updatedItems
+        );
         setLastScanned(scannedBarcode);
         
         // Show success feedback
@@ -331,23 +385,114 @@ const GlobalPackingSlip: React.FC = () => {
     setBarcode(e.target.value);
   };
   
+  // Update a product's quantity in Firebase
+  const updateProductQuantityInFirebase = async (productId: string, quantityChange: number, actionType: 'added' | 'removed') => {
+    if (!currentUser) return;
+    
+    try {
+      // Get the product from Firebase
+      const productRef = doc(db, 'products', productId);
+      const productDoc = await getDoc(productRef);
+      
+      if (!productDoc.exists()) {
+        console.error('Product not found:', productId);
+        return;
+      }
+      
+      const productData = productDoc.data() as Product;
+      
+      // Calculate new quantity
+      let newQuantity: number;
+      if (actionType === 'removed') {
+        newQuantity = Math.max(0, productData.quantity - quantityChange);
+      } else { // 'added'
+        newQuantity = productData.quantity + quantityChange;
+      }
+      
+      // Update product quantity in Firebase
+      await updateDoc(productRef, {
+        quantity: newQuantity,
+        updatedAt: new Date()
+      });
+      
+      // Log the activity
+      await logActivity(
+        actionType,
+        'product',
+        productId,
+        productData.name,
+        currentUser,
+        quantityChange
+      );
+      
+      return { success: true, newQuantity };
+    } catch (error) {
+      console.error('Error updating product quantity:', error);
+      return { success: false, error };
+    }
+  };
+  
   // Handle toggling an item's scanned status manually
-  const toggleItemScanned = (index: number) => {
+  const toggleItemScanned = async (index: number) => {
     const updatedItems = [...groupedItems];
     const item = updatedItems[index];
     
+    // Calculate quantity change
+    let quantityChange = 0;
+    let newScannedCount = 0;
+    
     // Toggle between fully scanned and not scanned
     if (item.scanned === item.totalQuantity) {
-      updatedItems[index] = {
-        ...item,
-        scanned: 0
-      };
+      // Going from fully scanned to not scanned
+      quantityChange = item.totalQuantity; // Add back to inventory
+      newScannedCount = 0;
+      
+      // Add back to inventory
+      if (quantityChange > 0) {
+        try {
+          await updateProductQuantityInFirebase(item.productId, quantityChange, 'added');
+        } catch (error) {
+          console.error('Error updating product quantity:', error);
+          setScanFeedback({
+            show: true,
+            success: false,
+            message: `Failed to update quantity for ${item.productName}`
+          });
+          setTimeout(() => {
+            setScanFeedback({ show: false, success: false, message: '' });
+          }, 3000);
+          return;
+        }
+      }
     } else {
-      updatedItems[index] = {
-        ...item,
-        scanned: item.totalQuantity
-      };
+      // Going from not scanned or partially scanned to fully scanned
+      quantityChange = item.totalQuantity - item.scanned; // Remove from inventory
+      newScannedCount = item.totalQuantity;
+      
+      // Remove from inventory
+      if (quantityChange > 0) {
+        try {
+          await updateProductQuantityInFirebase(item.productId, quantityChange, 'removed');
+        } catch (error) {
+          console.error('Error updating product quantity:', error);
+          setScanFeedback({
+            show: true,
+            success: false,
+            message: `Failed to update quantity for ${item.productName}`
+          });
+          setTimeout(() => {
+            setScanFeedback({ show: false, success: false, message: '' });
+          }, 3000);
+          return;
+        }
+      }
     }
+    
+    // Update local state
+    updatedItems[index] = {
+      ...item,
+      scanned: newScannedCount
+    };
     
     setGroupedItems(updatedItems);
     setFilteredItems(
@@ -361,11 +506,28 @@ const GlobalPackingSlip: React.FC = () => {
   };
   
   // Handle incrementing a product's scanned count
-  const incrementScannedCount = (index: number) => {
+  const incrementScannedCount = async (index: number) => {
     const updatedItems = [...groupedItems];
     const item = updatedItems[index];
     
     if (item.scanned < item.totalQuantity) {
+      // Remove 1 unit from inventory
+      try {
+        await updateProductQuantityInFirebase(item.productId, 1, 'removed');
+      } catch (error) {
+        console.error('Error updating product quantity:', error);
+        setScanFeedback({
+          show: true,
+          success: false,
+          message: `Failed to update quantity for ${item.productName}`
+        });
+        setTimeout(() => {
+          setScanFeedback({ show: false, success: false, message: '' });
+        }, 3000);
+        return;
+      }
+      
+      // Update local state
       updatedItems[index] = {
         ...item,
         scanned: item.scanned + 1
@@ -384,11 +546,28 @@ const GlobalPackingSlip: React.FC = () => {
   };
   
   // Handle decrementing a product's scanned count
-  const decrementScannedCount = (index: number) => {
+  const decrementScannedCount = async (index: number) => {
     const updatedItems = [...groupedItems];
     const item = updatedItems[index];
     
     if (item.scanned > 0) {
+      // Add 1 unit back to inventory
+      try {
+        await updateProductQuantityInFirebase(item.productId, 1, 'added');
+      } catch (error) {
+        console.error('Error updating product quantity:', error);
+        setScanFeedback({
+          show: true,
+          success: false,
+          message: `Failed to update quantity for ${item.productName}`
+        });
+        setTimeout(() => {
+          setScanFeedback({ show: false, success: false, message: '' });
+        }, 3000);
+        return;
+      }
+      
+      // Update local state
       updatedItems[index] = {
         ...item,
         scanned: item.scanned - 1
@@ -632,6 +811,9 @@ const GlobalPackingSlip: React.FC = () => {
         
         // Regroup items
         await groupItems(ordersData);
+        
+        // Clear saved state after successful update
+        clearSavedState();
       }
     } catch (error) {
       console.error('Error updating orders:', error);
@@ -704,13 +886,21 @@ const GlobalPackingSlip: React.FC = () => {
             </p>
           </div>
         </div>
-        <button
-          onClick={handlePrint}
-          className="inline-flex items-center bg-indigo-600 text-white px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm rounded-md hover:bg-indigo-700 transition-colors"
-        >
-          <PrinterIcon className="h-4 w-4 mr-1 sm:mr-2" />
-          Print Packing Slip
-        </button>
+        <div className="flex space-x-2">
+          <button
+            onClick={() => clearSavedState()}
+            className="inline-flex items-center border border-gray-300 bg-white text-gray-700 px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm rounded-md hover:bg-gray-50 transition-colors"
+          >
+            Reset Progress
+          </button>
+          <button
+            onClick={handlePrint}
+            className="inline-flex items-center bg-indigo-600 text-white px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm rounded-md hover:bg-indigo-700 transition-colors"
+          >
+            <PrinterIcon className="h-4 w-4 mr-1 sm:mr-2" />
+            Print Packing Slip
+          </button>
+        </div>
       </div>
       
       {/* Scan feedback alert */}
@@ -858,14 +1048,14 @@ const GlobalPackingSlip: React.FC = () => {
                               className="p-1 rounded-full bg-red-100 text-red-700 hover:bg-red-200"
                               title="Decrement scanned count"
                             >
-                              -
+                              <Minus className="h-3.5 w-3.5" />
                             </button>
                             <button
                               onClick={() => incrementScannedCount(originalIndex)}
                               className="p-1 rounded-full bg-green-100 text-green-700 hover:bg-green-200"
                               title="Increment scanned count"
                             >
-                              +
+                              <Plus className="h-3.5 w-3.5" />
                             </button>
                             <button
                               onClick={() => toggleItemScanned(originalIndex)}

@@ -55,6 +55,569 @@ type SearchResult = {
 // Define mode type
 type ModalMode = 'inventory' | 'shipping' | 'receiving';
 
+// Search Mode Tabs Component
+const SearchModeTabs: React.FC<{
+  mode: ModalMode;
+  handleModeChange: (newMode: ModalMode) => void;
+}> = ({ mode, handleModeChange }) => {
+  return (
+    <div className="flex border-b border-gray-200">
+      <button
+        onClick={() => handleModeChange('inventory')}
+        className={`flex-1 text-center py-2 text-xs sm:text-sm font-medium focus:outline-none ${
+          mode === 'inventory' 
+            ? 'text-indigo-600 border-b-2 border-indigo-600' 
+            : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
+        }`}
+      >
+        <Package className="h-3.5 w-3.5 sm:h-4 sm:w-4 mx-auto mb-1" />
+        Inventory
+      </button>
+      
+      <button
+        onClick={() => handleModeChange('shipping')}
+        className={`flex-1 text-center py-2 text-xs sm:text-sm font-medium focus:outline-none ${
+          mode === 'shipping' 
+            ? 'text-indigo-600 border-b-2 border-indigo-600' 
+            : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
+        }`}
+      >
+        <Truck className="h-3.5 w-3.5 sm:h-4 sm:w-4 mx-auto mb-1" />
+        Shipping
+      </button>
+      
+      <button
+        onClick={() => handleModeChange('receiving')}
+        className={`flex-1 text-center py-2 text-xs sm:text-sm font-medium focus:outline-none ${
+          mode === 'receiving' 
+            ? 'text-indigo-600 border-b-2 border-indigo-600' 
+            : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
+        }`}
+      >
+        <ArrowDown className="h-3.5 w-3.5 sm:h-4 sm:w-4 mx-auto mb-1" />
+        Receiving
+      </button>
+    </div>
+  );
+};
+
+// Search Bar Component
+const SearchBar: React.FC<{
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
+  searchInputRef: React.RefObject<HTMLInputElement>;
+  placeholder: string;
+}> = ({ searchQuery, setSearchQuery, searchInputRef, placeholder }) => {
+  return (
+    <div className="relative flex items-center">
+      <Search className="absolute left-3 h-4 w-4 sm:h-5 sm:w-5 text-gray-400" />
+      <input
+        ref={searchInputRef}
+        type="text"
+        placeholder={placeholder}
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        className="block w-full rounded-md border border-gray-300 py-1.5 sm:py-2 pl-9 sm:pl-10 pr-9 sm:pr-10 text-xs sm:text-sm placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+      />
+      {searchQuery && (
+        <button 
+          className="absolute right-3 text-gray-400 hover:text-gray-600"
+          onClick={() => {
+            setSearchQuery('');
+            if (searchInputRef.current) {
+              searchInputRef.current.value = '';
+              searchInputRef.current.focus();
+            }
+          }}
+        >
+          <X className="h-3 w-3 sm:h-4 sm:w-4" />
+        </button>
+      )}
+    </div>
+  );
+};
+
+// Product Not Found Component
+const ProductNotFound: React.FC<{
+  scannedBarcode: string;
+  handleCreateProduct: () => void;
+}> = ({ scannedBarcode, handleCreateProduct }) => {
+  return (
+    <div className="border-b border-gray-200 p-3 sm:p-4">
+      <div className="flex items-start mb-3 sm:mb-4">
+        <div className="flex-shrink-0 mt-1">
+          <AlertCircle className="h-5 w-5 sm:h-6 sm:w-6 text-amber-500" />
+        </div>
+        <div className="ml-3">
+          <h3 className="text-sm sm:text-base font-medium text-gray-900">
+            Product Not Found
+          </h3>
+          <p className="mt-1 text-xs sm:text-sm text-gray-500">
+            The barcode <span className="font-medium">{scannedBarcode}</span> was not found in your inventory.
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4 sm:flex sm:justify-between">
+        <div className="sm:flex-1 sm:pr-4">
+          <h4 className="text-xs sm:text-sm font-medium text-gray-700">Would you like to create a new product?</h4>
+          <p className="mt-1 text-xs text-gray-500">
+            Creating a new product will add it to your inventory with the scanned barcode.
+          </p>
+        </div>
+        <div className="mt-4 sm:mt-0">
+          <button
+            onClick={handleCreateProduct}
+            className="w-full inline-flex justify-center items-center rounded-md border border-transparent shadow-sm px-3 py-1.5 sm:px-4 sm:py-2 bg-indigo-600 text-xs sm:text-sm font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          >
+            <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+            Create Product
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Product Quantity Component
+const ProductQuantity: React.FC<{
+  mode: ModalMode;
+  productToUpdate: Product;
+  newQuantity: number;
+  setNewQuantity: (quantity: number) => void;
+  adjustmentAmount: number;
+  incrementQuantity: () => void;
+  decrementQuantity: () => void;
+  resetQuantity: () => void;
+  getQuantityLabel: () => string;
+}> = ({ 
+  mode, 
+  productToUpdate, 
+  newQuantity, 
+  setNewQuantity, 
+  adjustmentAmount,
+  incrementQuantity,
+  decrementQuantity,
+  resetQuantity,
+  getQuantityLabel
+}) => {
+  return (
+    <div className="mt-3 sm:mt-4">
+      <label htmlFor="quantity" className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+        {getQuantityLabel()}
+      </label>
+      
+      {mode === 'shipping' && (
+        <div className="bg-amber-50 p-2 rounded-md text-amber-800 text-xs mb-2">
+          <div className="flex items-start">
+            <div className="mr-1.5 mt-0.5">
+              <AlertCircle className="h-3 w-3" />
+            </div>
+            <div>
+              You are about to decrease the inventory by {productToUpdate.quantity - newQuantity} units.
+              {productToUpdate.quantity - newQuantity > productToUpdate.quantity && (
+                <span className="font-semibold"> Warning: This will result in negative inventory!</span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      
+      <div className="mt-1 sm:mt-2 flex items-center">
+        <button
+          onClick={decrementQuantity}
+          className={`rounded-l-md border border-gray-300 bg-gray-50 p-1 sm:p-2 text-gray-500 hover:bg-gray-100 ${
+            mode === 'shipping' ? 'bg-red-50' : ''
+          }`}
+        >
+          <Minus className="h-3 w-3 sm:h-4 sm:w-4" />
+        </button>
+        <input
+          type="number"
+          id="quantity"
+          value={newQuantity}
+          onChange={(e) => setNewQuantity(Math.max(0, parseInt(e.target.value) || 0))}
+          className={`block w-full border-y border-gray-300 py-1.5 sm:py-2 px-3 text-center text-xs sm:text-sm focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 ${
+            mode === 'shipping' && newQuantity < productToUpdate.quantity ? 'bg-red-50 text-red-800' :
+            mode === 'receiving' && newQuantity > productToUpdate.quantity ? 'bg-green-50 text-green-800' :
+            ''
+          }`}
+        />
+        <button
+          onClick={incrementQuantity}
+          className={`rounded-r-md border border-gray-300 bg-gray-50 p-1 sm:p-2 text-gray-500 hover:bg-gray-100 ${
+            mode === 'receiving' ? 'bg-green-50' : ''
+          }`}
+        >
+          <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
+        </button>
+        <button
+          onClick={resetQuantity}
+          className="ml-2 rounded border border-gray-300 p-1 sm:p-2 text-gray-500 hover:bg-gray-100"
+          title="Reset to original quantity"
+        >
+          <RotateCcw className="h-3 w-3 sm:h-4 sm:w-4" />
+        </button>
+      </div>
+      
+      {/* Display quantity change indicators */}
+      <div className="mt-2 flex justify-between text-xs">
+        {mode === 'shipping' && (
+          <div className="flex items-center text-red-600">
+            <ArrowDown className="h-3 w-3 mr-1" />
+            <span>{productToUpdate.quantity - newQuantity} units out</span>
+          </div>
+        )}
+        
+        {mode === 'receiving' && (
+          <div className="flex items-center text-green-600">
+            <ArrowUp className="h-3 w-3 mr-1" />
+            <span>{newQuantity - productToUpdate.quantity} units in</span>
+          </div>
+        )}
+        
+        {/* Display remaining percentage for shipping mode */}
+        {mode === 'shipping' && productToUpdate.quantity > 0 && (
+          <div className={`${
+            newQuantity / productToUpdate.quantity < 0.2 ? 'text-red-600' : 
+            newQuantity / productToUpdate.quantity < 0.5 ? 'text-amber-600' : 
+            'text-gray-600'
+          }`}>
+            {Math.round((newQuantity / productToUpdate.quantity) * 100)}% remaining
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Search Results List Component
+const SearchResultsList: React.FC<{
+  isLoading: boolean;
+  error: string | null;
+  searchQuery: string;
+  searchResults: SearchResult[];
+  activeIndex: number;
+  handleResultClick: (result: SearchResult) => void;
+  mode: ModalMode;
+  handleCreateProduct: () => void;
+  getIconForType: (type: string) => JSX.Element;
+  getTypeLabel: (type: string) => string;
+}> = ({
+  isLoading,
+  error,
+  searchQuery,
+  searchResults,
+  activeIndex,
+  handleResultClick,
+  mode,
+  handleCreateProduct,
+  getIconForType,
+  getTypeLabel
+}) => {
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-6 sm:py-8">
+        <Loader2 className="mr-2 h-5 w-5 sm:h-6 sm:w-6 animate-spin text-indigo-500" />
+        <span className="text-xs sm:text-sm text-gray-600">Searching...</span>
+      </div>
+    );
+  }
+  
+  if (error) {
+    return (
+      <div className="flex items-center justify-center py-6 sm:py-8 text-red-500">
+        <AlertCircle className="mr-2 h-5 w-5 sm:h-6 sm:w-6" />
+        <span className="text-xs sm:text-sm">{error}</span>
+      </div>
+    );
+  }
+  
+  if (searchResults.length === 0 && searchQuery) {
+    return (
+      <div className="flex flex-col items-center justify-center py-6 sm:py-8 text-gray-500">
+        <span className="text-xs sm:text-sm mb-2">No results found for "{searchQuery}"</span>
+        {mode === 'inventory' && (
+          <button
+            onClick={handleCreateProduct}
+            className="mt-2 inline-flex items-center text-xs font-medium text-indigo-600 hover:text-indigo-900"
+          >
+            <Plus className="h-3.5 w-3.5 mr-1" />
+            Create a new product
+          </button>
+        )}
+      </div>
+    );
+  }
+  
+  if (!searchQuery) {
+    return (
+      <div className="py-4 px-2">
+        <p className="text-xs sm:text-sm text-center text-gray-500">
+          {mode === 'shipping' 
+            ? 'Scan a product barcode to ship out items' 
+            : mode === 'receiving'
+              ? 'Scan a product barcode to receive new stock'
+              : 'Type to search or scan a barcode'
+          }
+        </p>
+        
+        <div className="mt-4 bg-gray-50 rounded-md p-3">
+          <h4 className="text-xs sm:text-sm font-medium text-gray-700 mb-2">Quick Tips:</h4>
+          <ul className="text-xs text-gray-600 space-y-1.5">
+            <li className="flex items-start">
+              <span className="mr-1.5">•</span>
+              <span>
+                {mode === 'shipping' 
+                  ? 'Scan products to quickly reduce inventory for shipping'
+                  : mode === 'receiving'
+                    ? 'Scan products to quickly add inventory when receiving stock'
+                    : 'Search by name, barcode, or scan products directly'
+                }
+              </span>
+            </li>
+            <li className="flex items-start">
+              <span className="mr-1.5">•</span>
+              <span>
+                You can adjust the quantity before confirming
+              </span>
+            </li>
+            <li className="flex items-start">
+              <span className="mr-1.5">•</span>
+              <span>
+                Press <kbd className="rounded border border-gray-300 bg-gray-100 px-1 py-0.5 text-xs">Enter</kbd> after scanning to quickly confirm
+              </span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    );
+  }
+  
+  return (
+    <ul className="divide-y divide-gray-200">
+      {searchResults.map((result, index) => (
+        <li
+          key={`${result.type}-${result.id}`}
+          className={`cursor-pointer px-3 sm:px-4 py-2 sm:py-3 hover:bg-gray-50 ${
+            index === activeIndex ? 'bg-indigo-50' : ''
+          }`}
+          onClick={() => handleResultClick(result)}
+        >
+          <div className="flex items-start">
+            <div className="mr-2 sm:mr-3 flex-shrink-0">
+              {getIconForType(result.type)}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between">
+                <p className="text-xs sm:text-sm font-medium text-gray-900 truncate">
+                  {result.name}
+                </p>
+                <span className="ml-2 rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-800">
+                  {getTypeLabel(result.type)}
+                </span>
+              </div>
+              {result.description && (
+                <p className="mt-1 text-xs text-gray-500 line-clamp-1">
+                  {result.description}
+                </p>
+              )}
+              {result.type === 'product' && (
+                <div className="mt-1 flex items-center space-x-4 text-xs text-gray-500">
+                  {result.barcode && (
+                    <span>Barcode: {result.barcode}</span>
+                  )}
+                  {result.quantity !== undefined && (
+                    <span className={result.quantity <= (result.minQuantity || 0) ? 'text-amber-500 font-medium' : ''}>
+                      Qty: {result.quantity}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+};
+
+// Product Detail View Component
+const ProductDetailView: React.FC<{
+  productToUpdate: Product;
+  mode: ModalMode;
+  resetAllStates: () => void;
+  navigate: (to: string) => void;
+  onClose: () => void;
+  newQuantity: number;
+  isUpdating: boolean;
+  updateProductQuantity: () => void;
+  getQuantityActionText: () => string;
+  ProductQuantityComponent: JSX.Element;
+}> = ({
+  productToUpdate,
+  mode,
+  resetAllStates,
+  navigate,
+  onClose,
+  newQuantity,
+  isUpdating,
+  updateProductQuantity,
+  getQuantityActionText,
+  ProductQuantityComponent
+}) => {
+  return (
+    <div className="border-b border-gray-200 p-3 sm:p-4">
+      <div className="mb-3 sm:mb-4 flex items-center justify-between">
+        <h3 className="text-base sm:text-lg font-semibold text-gray-900">
+          {mode === 'shipping' ? 'Ship Product' : 
+           mode === 'receiving' ? 'Receive Product' : 
+           'Product Found'}
+        </h3>
+        <div className="rounded bg-indigo-100 px-2 py-1 text-xs font-medium text-indigo-800">
+          {productToUpdate.barcode}
+        </div>
+      </div>
+      
+      <div className="flex items-start space-x-3 sm:space-x-4">
+        <div className="flex h-14 w-14 sm:h-16 sm:w-16 flex-shrink-0 items-center justify-center rounded-lg bg-indigo-100">
+          <Package className="h-6 w-6 sm:h-8 sm:w-8 text-indigo-600" />
+        </div>
+        
+        <div className="flex-1">
+          <h4 className="text-sm sm:text-md font-medium text-gray-900">
+            {productToUpdate.name}
+          </h4>
+          {productToUpdate.description && (
+            <p className="mt-1 text-xs sm:text-sm text-gray-500 line-clamp-1">
+              {productToUpdate.description}
+            </p>
+          )}
+          
+          <div className="mt-2 sm:mt-3 grid grid-cols-2 gap-3 sm:gap-4 text-xs sm:text-sm">
+            <div>
+              <span className="font-medium text-gray-500">Current quantity:</span>{' '}
+              <span className={`font-semibold ${
+                productToUpdate.quantity <= productToUpdate.minQuantity 
+                  ? 'text-amber-500' 
+                  : 'text-gray-900'
+              }`}>
+                {productToUpdate.quantity}
+              </span>
+              
+              {productToUpdate.quantity <= productToUpdate.minQuantity && (
+                <div className="text-xs text-amber-500 flex items-center mt-1">
+                  <AlertCircle className="h-3 w-3 mr-1" />
+                  Low stock
+                </div>
+              )}
+            </div>
+            <div>
+              <span className="font-medium text-gray-500">Min quantity:</span>{' '}
+              <span className="font-semibold text-gray-900">{productToUpdate.minQuantity}</span>
+            </div>
+            
+            {/* Show location in shipping/receiving modes */}
+            {(mode === 'shipping' || mode === 'receiving') && (
+              <div className="col-span-2 mt-1">
+                <span className="font-medium text-gray-500">Location:</span>{' '}
+                <span className="font-semibold text-gray-900">
+                  {/* We would need to fetch location name here */}
+                  Fetching...
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+      
+      {ProductQuantityComponent}
+      
+      <div className="mt-4 flex justify-between">
+        <button
+          onClick={() => {
+            // Reset states before navigating to prevent issues with subsequent searches
+            const productId = productToUpdate.id;
+            resetAllStates();
+            navigate(`/products/${productId}`);
+            onClose();
+          }}
+          className="inline-flex items-center rounded border border-gray-300 bg-white px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          View Details
+          <ArrowRight className="ml-1 sm:ml-2 h-3 w-3 sm:h-4 sm:w-4" />
+        </button>
+        
+        <button
+          onClick={updateProductQuantity}
+          disabled={isUpdating || (mode === 'inventory' && newQuantity === productToUpdate.quantity)}
+          className={`inline-flex items-center rounded px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 ${
+            mode === 'shipping' 
+              ? 'bg-red-600 hover:bg-red-700 focus:ring-red-500' 
+              : mode === 'receiving'
+                ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500'
+                : 'bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500'
+          }`}
+        >
+          {isUpdating ? (
+            <>
+              <Loader2 className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
+              Updating...
+            </>
+          ) : (
+            getQuantityActionText()
+          )}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// Default Adjustment Component
+const DefaultAdjustmentControl: React.FC<{
+  mode: ModalMode;
+  adjustmentAmount: number;
+  setAdjustmentAmount: (value: number) => void;
+  handleAdjustmentChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}> = ({ 
+  mode, 
+  adjustmentAmount, 
+  setAdjustmentAmount, 
+  handleAdjustmentChange 
+}) => {
+  return (
+    <div className="px-3 py-2 sm:px-4 sm:py-3 border-b border-gray-200 flex items-center justify-between">
+      <label className="text-xs sm:text-sm text-gray-700 font-medium">
+        Default {mode === 'shipping' ? 'shipping' : 'receiving'} quantity:
+      </label>
+      <div className="flex items-center">
+        <button
+          onClick={() => setAdjustmentAmount(Math.max(1, adjustmentAmount - 1))}
+          className="rounded-l-md border border-gray-300 bg-gray-50 p-1 sm:p-1.5 text-gray-500 hover:bg-gray-100"
+        >
+          <Minus className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+        </button>
+        
+        <input
+          type="number"
+          min="1"
+          value={adjustmentAmount}
+          onChange={handleAdjustmentChange}
+          className="w-12 sm:w-16 border-y border-gray-300 py-1 sm:py-1.5 px-2 text-center text-xs sm:text-sm"
+        />
+        
+        <button
+          onClick={() => setAdjustmentAmount(adjustmentAmount + 1)}
+          className="rounded-r-md border border-gray-300 bg-gray-50 p-1 sm:p-1.5 text-gray-500 hover:bg-gray-100"
+        >
+          <Plus className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// Main SearchModal Component
 const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
   const { currentUser } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
@@ -687,43 +1250,7 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
           onClick={(e) => e.stopPropagation()}
         >
           {/* Mode Selection */}
-          <div className="flex border-b border-gray-200">
-            <button
-              onClick={() => handleModeChange('inventory')}
-              className={`flex-1 text-center py-2 text-xs sm:text-sm font-medium focus:outline-none ${
-                mode === 'inventory' 
-                  ? 'text-indigo-600 border-b-2 border-indigo-600' 
-                  : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <Package className="h-3.5 w-3.5 sm:h-4 sm:w-4 mx-auto mb-1" />
-              Inventory
-            </button>
-            
-            <button
-              onClick={() => handleModeChange('shipping')}
-              className={`flex-1 text-center py-2 text-xs sm:text-sm font-medium focus:outline-none ${
-                mode === 'shipping' 
-                  ? 'text-indigo-600 border-b-2 border-indigo-600' 
-                  : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <Truck className="h-3.5 w-3.5 sm:h-4 sm:w-4 mx-auto mb-1" />
-              Shipping
-            </button>
-            
-            <button
-              onClick={() => handleModeChange('receiving')}
-              className={`flex-1 text-center py-2 text-xs sm:text-sm font-medium focus:outline-none ${
-                mode === 'receiving' 
-                  ? 'text-indigo-600 border-b-2 border-indigo-600' 
-                  : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <ArrowDown className="h-3.5 w-3.5 sm:h-4 sm:w-4 mx-auto mb-1" />
-              Receiving
-            </button>
-          </div>
+          <SearchModeTabs mode={mode} handleModeChange={handleModeChange} />
           
           {/* Mode Description */}
           <div className="bg-gray-50 px-3 py-2 sm:px-4 sm:py-2 border-b border-gray-200">
@@ -739,30 +1266,12 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
           
           {/* Search header */}
           <div className="border-b border-gray-200 p-3 sm:p-4">
-            <div className="relative flex items-center">
-              <Search className="absolute left-3 h-4 w-4 sm:h-5 sm:w-5 text-gray-400" />
-              <input
-                ref={searchInputRef}
-                type="text"
-                placeholder={getSearchPlaceholder()}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="block w-full rounded-md border border-gray-300 py-1.5 sm:py-2 pl-9 sm:pl-10 pr-9 sm:pr-10 text-xs sm:text-sm placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              />
-              {searchQuery && (
-                <button 
-                  className="absolute right-3 text-gray-400 hover:text-gray-600"
-                  onClick={() => {
-                    setSearchQuery('');
-                    if (searchInputRef.current) {
-                      searchInputRef.current.value = '';
-                    }
-                  }}
-                >
-                  <X className="h-3 w-3 sm:h-4 sm:w-4" />
-                </button>
-              )}
-            </div>
+            <SearchBar 
+              searchQuery={searchQuery} 
+              setSearchQuery={setSearchQuery} 
+              searchInputRef={searchInputRef} 
+              placeholder={getSearchPlaceholder()} 
+            />
             
             <div className="mt-1 flex items-center justify-between text-xs text-gray-500 flex-wrap gap-1">
               <span>
@@ -779,376 +1288,64 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
           
           {/* Adjustment quantity for shipping/receiving modes */}
           {(mode === 'shipping' || mode === 'receiving') && !showProductModal && !isProductNotFound && (
-            <div className="px-3 py-2 sm:px-4 sm:py-3 border-b border-gray-200 flex items-center justify-between">
-              <label className="text-xs sm:text-sm text-gray-700 font-medium">
-                Default {mode === 'shipping' ? 'shipping' : 'receiving'} quantity:
-              </label>
-              <div className="flex items-center">
-                <button
-                  onClick={() => setAdjustmentAmount(Math.max(1, adjustmentAmount - 1))}
-                  className="rounded-l-md border border-gray-300 bg-gray-50 p-1 sm:p-1.5 text-gray-500 hover:bg-gray-100"
-                >
-                  <Minus className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                </button>
-                
-                <input
-                  type="number"
-                  min="1"
-                  value={adjustmentAmount}
-                  onChange={handleAdjustmentChange}
-                  className="w-12 sm:w-16 border-y border-gray-300 py-1 sm:py-1.5 px-2 text-center text-xs sm:text-sm"
-                />
-                
-                <button
-                  onClick={() => setAdjustmentAmount(adjustmentAmount + 1)}
-                  className="rounded-r-md border border-gray-300 bg-gray-50 p-1 sm:p-1.5 text-gray-500 hover:bg-gray-100"
-                >
-                  <Plus className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                </button>
-              </div>
-            </div>
+            <DefaultAdjustmentControl 
+              mode={mode} 
+              adjustmentAmount={adjustmentAmount} 
+              setAdjustmentAmount={setAdjustmentAmount}
+              handleAdjustmentChange={handleAdjustmentChange}
+            />
           )}
           
           {/* Product not found prompt */}
           {isProductNotFound && (
-            <div className="border-b border-gray-200 p-3 sm:p-4">
-              <div className="flex items-start mb-3 sm:mb-4">
-                <div className="flex-shrink-0 mt-1">
-                  <AlertCircle className="h-5 w-5 sm:h-6 sm:w-6 text-amber-500" />
-                </div>
-                <div className="ml-3">
-                  <h3 className="text-sm sm:text-base font-medium text-gray-900">
-                    Product Not Found
-                  </h3>
-                  <p className="mt-1 text-xs sm:text-sm text-gray-500">
-                    The barcode <span className="font-medium">{scannedBarcode}</span> was not found in your inventory.
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-4 sm:flex sm:justify-between">
-                <div className="sm:flex-1 sm:pr-4">
-                  <h4 className="text-xs sm:text-sm font-medium text-gray-700">Would you like to create a new product?</h4>
-                  <p className="mt-1 text-xs text-gray-500">
-                    Creating a new product will add it to your inventory with the scanned barcode.
-                  </p>
-                </div>
-                <div className="mt-4 sm:mt-0">
-                  <button
-                    onClick={handleCreateProduct}
-                    className="w-full inline-flex justify-center items-center rounded-md border border-transparent shadow-sm px-3 py-1.5 sm:px-4 sm:py-2 bg-indigo-600 text-xs sm:text-sm font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                  >
-                    <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                    Create Product
-                  </button>
-                </div>
-              </div>
-            </div>
+            <ProductNotFound
+              scannedBarcode={scannedBarcode}
+              handleCreateProduct={handleCreateProduct}
+            />
           )}
           
           {/* Product quantity modal for barcode matches */}
           {showProductModal && productToUpdate && (
-            <div className="border-b border-gray-200 p-3 sm:p-4">
-              <div className="mb-3 sm:mb-4 flex items-center justify-between">
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900">
-                  {mode === 'shipping' ? 'Ship Product' : 
-                   mode === 'receiving' ? 'Receive Product' : 
-                   'Product Found'}
-                </h3>
-                <div className="rounded bg-indigo-100 px-2 py-1 text-xs font-medium text-indigo-800">
-                  {productToUpdate.barcode}
-                </div>
-              </div>
-              
-              <div className="flex items-start space-x-3 sm:space-x-4">
-                <div className="flex h-14 w-14 sm:h-16 sm:w-16 flex-shrink-0 items-center justify-center rounded-lg bg-indigo-100">
-                  <Package className="h-6 w-6 sm:h-8 sm:w-8 text-indigo-600" />
-                </div>
-                
-                <div className="flex-1">
-                  <h4 className="text-sm sm:text-md font-medium text-gray-900">
-                    {productToUpdate.name}
-                  </h4>
-                  {productToUpdate.description && (
-                    <p className="mt-1 text-xs sm:text-sm text-gray-500 line-clamp-1">
-                      {productToUpdate.description}
-                    </p>
-                  )}
-                  
-                  <div className="mt-2 sm:mt-3 grid grid-cols-2 gap-3 sm:gap-4 text-xs sm:text-sm">
-                    <div>
-                      <span className="font-medium text-gray-500">Current quantity:</span>{' '}
-                      <span className={`font-semibold ${
-                        productToUpdate.quantity <= productToUpdate.minQuantity 
-                          ? 'text-amber-500' 
-                          : 'text-gray-900'
-                      }`}>
-                        {productToUpdate.quantity}
-                      </span>
-                      
-                      {productToUpdate.quantity <= productToUpdate.minQuantity && (
-                        <div className="text-xs text-amber-500 flex items-center mt-1">
-                          <AlertCircle className="h-3 w-3 mr-1" />
-                          Low stock
-                        </div>
-                      )}
-                    </div>
-                    <div>
-                      <span className="font-medium text-gray-500">Min quantity:</span>{' '}
-                      <span className="font-semibold text-gray-900">{productToUpdate.minQuantity}</span>
-                    </div>
-                    
-                    {/* Show location in shipping/receiving modes */}
-                    {(mode === 'shipping' || mode === 'receiving') && (
-                      <div className="col-span-2 mt-1">
-                        <span className="font-medium text-gray-500">Location:</span>{' '}
-                        <span className="font-semibold text-gray-900">
-                          {/* We would need to fetch location name here */}
-                          Fetching...
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-              
-              <div className="mt-3 sm:mt-4">
-                <label htmlFor="quantity" className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                  {getQuantityLabel()}
-                </label>
-                
-                {mode === 'shipping' && (
-                  <div className="bg-amber-50 p-2 rounded-md text-amber-800 text-xs mb-2">
-                    <div className="flex items-start">
-                      <div className="mr-1.5 mt-0.5">
-                        <AlertCircle className="h-3 w-3" />
-                      </div>
-                      <div>
-                        You are about to decrease the inventory by {adjustmentAmount} units.
-                        {productToUpdate.quantity - newQuantity > productToUpdate.quantity && (
-                          <span className="font-semibold"> Warning: This will result in negative inventory!</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-                
-                <div className="mt-1 sm:mt-2 flex items-center">
-                  <button
-                    onClick={decrementQuantity}
-                    className={`rounded-l-md border border-gray-300 bg-gray-50 p-1 sm:p-2 text-gray-500 hover:bg-gray-100 ${
-                      mode === 'shipping' ? 'bg-red-50' : ''
-                    }`}
-                  >
-                    <Minus className="h-3 w-3 sm:h-4 sm:w-4" />
-                  </button>
-                  <input
-                    type="number"
-                    id="quantity"
-                    value={newQuantity}
-                    onChange={(e) => setNewQuantity(Math.max(0, parseInt(e.target.value) || 0))}
-                    className={`block w-full border-y border-gray-300 py-1.5 sm:py-2 px-3 text-center text-xs sm:text-sm focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 ${
-                      mode === 'shipping' && newQuantity < productToUpdate.quantity ? 'bg-red-50 text-red-800' :
-                      mode === 'receiving' && newQuantity > productToUpdate.quantity ? 'bg-green-50 text-green-800' :
-                      ''
-                    }`}
-                  />
-                  <button
-                    onClick={incrementQuantity}
-                    className={`rounded-r-md border border-gray-300 bg-gray-50 p-1 sm:p-2 text-gray-500 hover:bg-gray-100 ${
-                      mode === 'receiving' ? 'bg-green-50' : ''
-                    }`}
-                  >
-                    <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
-                  </button>
-                  <button
-                    onClick={resetQuantity}
-                    className="ml-2 rounded border border-gray-300 p-1 sm:p-2 text-gray-500 hover:bg-gray-100"
-                    title="Reset to original quantity"
-                  >
-                    <RotateCcw className="h-3 w-3 sm:h-4 sm:w-4" />
-                  </button>
-                </div>
-                
-                {/* Display quantity change indicators */}
-                <div className="mt-2 flex justify-between text-xs">
-                  {mode === 'shipping' && (
-                    <div className="flex items-center text-red-600">
-                      <ArrowDown className="h-3 w-3 mr-1" />
-                      <span>{productToUpdate.quantity - newQuantity} units out</span>
-                    </div>
-                  )}
-                  
-                  {mode === 'receiving' && (
-                    <div className="flex items-center text-green-600">
-                      <ArrowUp className="h-3 w-3 mr-1" />
-                      <span>{newQuantity - productToUpdate.quantity} units in</span>
-                    </div>
-                  )}
-                  
-                  {/* Display remaining percentage for shipping mode */}
-                  {mode === 'shipping' && productToUpdate.quantity > 0 && (
-                    <div className={`${
-                      newQuantity / productToUpdate.quantity < 0.2 ? 'text-red-600' : 
-                      newQuantity / productToUpdate.quantity < 0.5 ? 'text-amber-600' : 
-                      'text-gray-600'
-                    }`}>
-                      {Math.round((newQuantity / productToUpdate.quantity) * 100)}% remaining
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              <div className="mt-4 flex justify-between">
-                <button
-                  onClick={() => {
-                    // Reset states before navigating to prevent issues with subsequent searches
-                    const productId = productToUpdate.id;
-                    resetAllStates();
-                    navigate(`/products/${productId}`);
-                    onClose();
-                  }}
-                  className="inline-flex items-center rounded border border-gray-300 bg-white px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  View Details
-                  <ArrowRight className="ml-1 sm:ml-2 h-3 w-3 sm:h-4 sm:w-4" />
-                </button>
-                
-                <button
-                  onClick={() => updateProductQuantity()}
-                  disabled={isUpdating || (mode === 'inventory' && newQuantity === productToUpdate.quantity)}
-                  className={`inline-flex items-center rounded px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 ${
-                    mode === 'shipping' 
-                      ? 'bg-red-600 hover:bg-red-700 focus:ring-red-500' 
-                      : mode === 'receiving'
-                        ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500'
-                        : 'bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500'
-                  }`}
-                >
-                  {isUpdating ? (
-                    <>
-                      <Loader2 className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
-                      Updating...
-                    </>
-                  ) : (
-                    getQuantityActionText()
-                  )}
-                </button>
-              </div>
-            </div>
+            <ProductDetailView
+              productToUpdate={productToUpdate}
+              mode={mode}
+              resetAllStates={resetAllStates}
+              navigate={navigate}
+              onClose={onClose}
+              newQuantity={newQuantity}
+              isUpdating={isUpdating}
+              updateProductQuantity={() => updateProductQuantity()}
+              getQuantityActionText={getQuantityActionText}
+              ProductQuantityComponent={
+                <ProductQuantity
+                  mode={mode}
+                  productToUpdate={productToUpdate}
+                  newQuantity={newQuantity}
+                  setNewQuantity={setNewQuantity}
+                  adjustmentAmount={adjustmentAmount}
+                  incrementQuantity={incrementQuantity}
+                  decrementQuantity={decrementQuantity}
+                  resetQuantity={resetQuantity}
+                  getQuantityLabel={getQuantityLabel}
+                />
+              }
+            />
           )}
           
           {/* Search results */}
           <div className="max-h-[50vh] sm:max-h-[60vh] overflow-y-auto p-2">
-            {isLoading ? (
-              <div className="flex items-center justify-center py-6 sm:py-8">
-                <Loader2 className="mr-2 h-5 w-5 sm:h-6 sm:w-6 animate-spin text-indigo-500" />
-                <span className="text-xs sm:text-sm text-gray-600">Searching...</span>
-              </div>
-            ) : error ? (
-              <div className="flex items-center justify-center py-6 sm:py-8 text-red-500">
-                <AlertCircle className="mr-2 h-5 w-5 sm:h-6 sm:w-6" />
-                <span className="text-xs sm:text-sm">{error}</span>
-              </div>
-            ) : searchResults.length === 0 && searchQuery && !isProductNotFound ? (
-              <div className="flex flex-col items-center justify-center py-6 sm:py-8 text-gray-500">
-                <span className="text-xs sm:text-sm mb-2">No results found for "{searchQuery}"</span>
-                {mode === 'inventory' && (
-                  <button
-                    onClick={handleCreateProduct}
-                    className="mt-2 inline-flex items-center text-xs font-medium text-indigo-600 hover:text-indigo-900"
-                  >
-                    <Plus className="h-3.5 w-3.5 mr-1" />
-                    Create a new product
-                  </button>
-                )}
-              </div>
-            ) : searchQuery && !isProductNotFound ? (
-              <ul className="divide-y divide-gray-200">
-                {searchResults.map((result, index) => (
-                  <li
-                    key={`${result.type}-${result.id}`}
-                    className={`cursor-pointer px-3 sm:px-4 py-2 sm:py-3 hover:bg-gray-50 ${
-                      index === activeIndex ? 'bg-indigo-50' : ''
-                    }`}
-                    onClick={() => handleResultClick(result)}
-                  >
-                    <div className="flex items-start">
-                      <div className="mr-2 sm:mr-3 flex-shrink-0">
-                        {getIconForType(result.type)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <p className="text-xs sm:text-sm font-medium text-gray-900 truncate">
-                            {result.name}
-                          </p>
-                          <span className="ml-2 rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-800">
-                            {getTypeLabel(result.type)}
-                          </span>
-                        </div>
-                        {result.description && (
-                          <p className="mt-1 text-xs text-gray-500 line-clamp-1">
-                            {result.description}
-                          </p>
-                        )}
-                        {result.type === 'product' && (
-                          <div className="mt-1 flex items-center space-x-4 text-xs text-gray-500">
-                            {result.barcode && (
-                              <span>Barcode: {result.barcode}</span>
-                            )}
-                            {result.quantity !== undefined && (
-                              <span className={result.quantity <= (result.minQuantity || 0) ? 'text-amber-500 font-medium' : ''}>
-                                Qty: {result.quantity}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <div className="py-4 px-2">
-                <p className="text-xs sm:text-sm text-center text-gray-500">
-                  {mode === 'shipping' 
-                    ? 'Scan a product barcode to ship out items' 
-                    : mode === 'receiving'
-                      ? 'Scan a product barcode to receive new stock'
-                      : 'Type to search or scan a barcode'
-                  }
-                </p>
-                
-                <div className="mt-4 bg-gray-50 rounded-md p-3">
-                  <h4 className="text-xs sm:text-sm font-medium text-gray-700 mb-2">Quick Tips:</h4>
-                  <ul className="text-xs text-gray-600 space-y-1.5">
-                    <li className="flex items-start">
-                      <span className="mr-1.5">•</span>
-                      <span>
-                        {mode === 'shipping' 
-                          ? 'Scan products to quickly reduce inventory for shipping'
-                          : mode === 'receiving'
-                            ? 'Scan products to quickly add inventory when receiving stock'
-                            : 'Search by name, barcode, or scan products directly'
-                        }
-                      </span>
-                    </li>
-                    <li className="flex items-start">
-                      <span className="mr-1.5">•</span>
-                      <span>
-                        You can adjust the quantity before confirming
-                      </span>
-                    </li>
-                    <li className="flex items-start">
-                      <span className="mr-1.5">•</span>
-                      <span>
-                        Press <kbd className="rounded border border-gray-300 bg-gray-100 px-1 py-0.5 text-xs">Enter</kbd> after scanning to quickly confirm
-                      </span>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            )}
+            <SearchResultsList
+              isLoading={isLoading}
+              error={error}
+              searchQuery={searchQuery}
+              searchResults={searchResults}
+              activeIndex={activeIndex}
+              handleResultClick={handleResultClick}
+              mode={mode}
+              handleCreateProduct={handleCreateProduct}
+              getIconForType={getIconForType}
+              getTypeLabel={getTypeLabel}
+            />
           </div>
         </div>
       </div>

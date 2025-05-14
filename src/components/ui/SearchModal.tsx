@@ -169,6 +169,9 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
     if (!searchQuery.trim()) {
       setSearchResults([]);
       setIsProductNotFound(false);
+      if (searchInputRef.current) {
+        searchInputRef.current.value = '';
+      }
       return;
     }
     
@@ -334,6 +337,9 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
   const handleModeChange = (newMode: ModalMode) => {
     setMode(newMode);
     setSearchQuery(''); // Clear search when switching modes
+    if (searchInputRef.current) {
+      searchInputRef.current.value = ''; // Clear input field value
+    }
     setSearchResults([]);
     setProductToUpdate(null);
     setShowProductModal(false);
@@ -530,6 +536,9 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
       
       // Clear form after successful update
       setSearchQuery('');
+      if (searchInputRef.current) {
+        searchInputRef.current.value = '';
+      }
       setShowProductModal(false);
       setProductToUpdate(null);
       
@@ -696,7 +705,12 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
               {searchQuery && (
                 <button 
                   className="absolute right-3 text-gray-400 hover:text-gray-600"
-                  onClick={() => setSearchQuery('')}
+                  onClick={() => {
+                    setSearchQuery('');
+                    if (searchInputRef.current) {
+                      searchInputRef.current.value = '';
+                    }
+                  }}
                 >
                   <X className="h-3 w-3 sm:h-4 sm:w-4" />
                 </button>
@@ -1048,7 +1062,7 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
               <div className="py-4 px-2">
                 <p className="text-xs sm:text-sm text-center text-gray-500">
                   {mode === 'shipping' 
-                    ? 'Scan a product barcode to ship items' 
+                    ? 'Scan a product barcode to ship out items' 
                     : mode === 'receiving'
                       ? 'Scan a product barcode to receive new stock'
                       : 'Type to search or scan a barcode'

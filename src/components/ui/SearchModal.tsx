@@ -386,6 +386,9 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
       case 'product':
         if (mode === 'inventory') {
           navigate(`/products/${result.id}`);
+          // Reset states before closing to prevent issues with subsequent searches
+          setIsBarcodeMatch(false);
+          setProductToUpdate(null);
           onClose();
         } else {
           // In shipping/receiving modes, fetch the product and show the quantity modal
@@ -982,6 +985,9 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
                 <button
                   onClick={() => {
                     navigate(`/products/${productToUpdate.id}`);
+                    // Reset states before closing to prevent issues with subsequent searches
+                    setIsBarcodeMatch(false);
+                    setProductToUpdate(null);
                     onClose();
                   }}
                   className="inline-flex items-center rounded border border-gray-300 bg-white px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-50"

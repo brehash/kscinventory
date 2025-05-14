@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc, collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, query, orderBy, limit, updateDoc, addDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { Product, ProductCategory, ProductType, Location, Provider, PriceHistory } from '../../types';
 import { 
@@ -18,10 +18,15 @@ import {
 } from 'lucide-react';
 import PriceHistoryTable from './PriceHistoryTable';
 import ProductActivityLog from '../activity/ProductActivityLog';
+import Modal from '../ui/Modal';
+import ProductForm from './ProductForm';
+import { useAuth } from '../auth/AuthProvider';
+import { logActivity } from '../../utils/activityLogger';
 
 const ProductDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { currentUser } = useAuth();
   const [product, setProduct] = useState<Product | null>(null);
   const [category, setCategory] = useState<ProductCategory | null>(null);
   const [productType, setProductType] = useState<ProductType | null>(null);
@@ -32,6 +37,9 @@ const ProductDetails: React.FC = () => {
   const [showPriceHistory, setShowPriceHistory] = useState(false);
   const [recentPriceChange, setRecentPriceChange] = useState<PriceHistory | null>(null);
   const [hasPriceHistory, setHasPriceHistory] = useState(false);
+  
+  // Add state for edit modal
+  const [showEditModal, setShowEditModal] = useState(false);
 
   useEffect(() => {
     const fetchProductDetails = async () => {
@@ -101,6 +109,84 @@ const ProductDetails: React.FC = () => {
 
     fetchProductDetails();
   }, [id]);
+  
+  const handleEditProduct = async (productData: Partial<Product>) => {
+    if (!id || !product || !currentUser) return;
+    
+    try {
+      // Prepare updated product data
+      const updatedProduct: Partial<Product> = {
+        ...productData,
+        updatedAt: new Date()
+      };
+      
+      // Check if cost has changed
+      const newCost = productData.cost;
+      const oldCost = product.cost;
+      const costChanged = newCost !== undefined && oldCost !== undefined && newCost !== oldCost;
+      
+      // If cost changed, update lastCost field and add to price history
+      if (costChanged && oldCost !== undefined && newCost !== undefined) {
+        updatedProduct.lastCost = oldCost;
+        
+        // Get provider information for the price history
+        let providerName = 'Unknown Provider';
+        if (product.providerId) {
+          const providerRef = doc(db, 'providers', product.providerId);
+          const providerSnap = await getDoc(providerRef);
+          if (providerSnap.exists()) {
+            providerName = providerSnap.data().name;
+          }
+        }
+        
+        // Calculate change percentage
+        const changePercentage = ((newCost - oldCost) / oldCost) * 100;
+        
+        // Create a price history record
+        const priceHistoryData: PriceHistory = {
+          productId: id,
+          oldCost: oldCost,
+          newCost: newCost,
+          changeDate: new Date(),
+          userId: currentUser.uid,
+          userName: currentUser.displayName || currentUser.email || 'Unknown User',
+          providerId: product.providerId || 'unknown',
+          providerName: providerName,
+          changePercentage: changePercentage
+        };
+        
+        // Add to priceHistory subcollection
+        await addDoc(
+          collection(db, `products/${id}/priceHistory`),
+          priceHistoryData
+        );
+      }
+      
+      // Update the product in Firestore
+      const productRef = doc(db, 'products', id);
+      await updateDoc(productRef, updatedProduct);
+      
+      // Log the activity
+      await logActivity(
+        'updated', 
+        'product', 
+        id, 
+        productData.name || product.name, 
+        currentUser,
+        productData.quantity
+      );
+      
+      // Update the product in the local state
+      setProduct({
+        ...product,
+        ...updatedProduct
+      });
+      
+      setShowEditModal(false);
+    } catch (error) {
+      console.error('Error updating product:', error);
+    }
+  };
 
   if (loading) {
     return (
@@ -161,7 +247,7 @@ const ProductDetails: React.FC = () => {
           </div>
         </div>
         <button
-          onClick={() => navigate(`/products/${id}/edit`)}
+          onClick={() => setShowEditModal(true)}
           className="inline-flex items-center bg-indigo-600 text-white px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm rounded-md hover:bg-indigo-700 transition-colors"
         >
           <Edit className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
@@ -410,6 +496,19 @@ const ProductDetails: React.FC = () => {
           {id && <ProductActivityLog productId={id} />}
         </div>
       </div>
+
+      {/* Edit Product Modal */}
+      <Modal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        title="Edit Product"
+      >
+        <ProductForm
+          initialData={product}
+          onSubmit={handleEditProduct}
+          onCancel={() => setShowEditModal(false)}
+        />
+      </Modal>
     </div>
   );
 };

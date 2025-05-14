@@ -7,8 +7,6 @@ import { Calendar, Filter, ArrowUp, ArrowDown, User, Clock, Activity, AlertCircl
 import StatCard from './StatCard';
 import LowStockAlerts from './LowStockAlerts';
 import InventoryChart from './InventoryChart';
-import { format, parseISO, isValid, isBefore, isAfter, isSameDay } from 'date-fns';
-import { Calendar, Filter, ArrowUp, ArrowDown, User, Clock, Activity, AlertCircle, Loader2, Edit, Trash, Plus, Minus, ChevronLeft, ChevronRight } from 'lucide-react';
 import ReactPaginate from 'react-paginate';
 import { useNavigate } from 'react-router-dom';
 import ValueByCategory from './ValueByCategory';

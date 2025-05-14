@@ -14,22 +14,22 @@ interface ProductFormProps {
 
 const ProductForm: React.FC<ProductFormProps> = ({ initialData, onSubmit, onCancel }) => {
   const { currentUser } = useAuth();
-  const [formData, setFormData] = useState<Partial<Product>>(
-    initialData || {
-      name: '',
-      description: '',
-      barcode: '',
-      categoryId: '',
-      typeId: '',
-      locationId: '',
-      providerId: '', // Now optional
-      quantity: 1,
-      minQuantity: 1,
-      price: 0,
-      cost: 0, // Now optional
-      vatPercentage: 19, // Default VAT in Romania is 19%
-    }
-  );
+  
+  // Initialize form data with initialData or defaults
+  const [formData, setFormData] = useState<Partial<Product>>({
+    name: initialData?.name || '',
+    description: initialData?.description || '',
+    barcode: initialData?.barcode || '',
+    categoryId: initialData?.categoryId || '',
+    typeId: initialData?.typeId || '',
+    locationId: initialData?.locationId || '',
+    providerId: initialData?.providerId || '', 
+    quantity: initialData?.quantity !== undefined ? initialData.quantity : 1,
+    minQuantity: initialData?.minQuantity !== undefined ? initialData.minQuantity : 1,
+    price: initialData?.price !== undefined ? initialData.price : 0,
+    cost: initialData?.cost !== undefined ? initialData.cost : 0,
+    vatPercentage: initialData?.vatPercentage !== undefined ? initialData.vatPercentage : 19,
+  });
   
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [productTypes, setProductTypes] = useState<ProductType[]>([]);
@@ -71,8 +71,18 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, onSubmit, onCanc
     if (initialData) {
       console.log('Setting form data from initialData:', initialData);
       setFormData({
-        ...formData,
-        ...initialData,
+        name: initialData.name || formData.name,
+        description: initialData.description || formData.description,
+        barcode: initialData.barcode || formData.barcode,
+        categoryId: initialData.categoryId || formData.categoryId,
+        typeId: initialData.typeId || formData.typeId,
+        locationId: initialData.locationId || formData.locationId,
+        providerId: initialData.providerId || formData.providerId,
+        quantity: initialData.quantity !== undefined ? initialData.quantity : formData.quantity,
+        minQuantity: initialData.minQuantity !== undefined ? initialData.minQuantity : formData.minQuantity,
+        price: initialData.price !== undefined ? initialData.price : formData.price,
+        cost: initialData.cost !== undefined ? initialData.cost : formData.cost,
+        vatPercentage: initialData.vatPercentage !== undefined ? initialData.vatPercentage : formData.vatPercentage,
       });
     }
   }, [initialData]);

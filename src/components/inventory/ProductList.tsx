@@ -158,9 +158,9 @@ const ProductList: React.FC = () => {
         setCurrentPage(0);
       }
       
-      const snapshot = await getDocs(productsQuery);
+      const productsSnapshot = await getDocs(productsQuery);
       
-      if (snapshot.empty) {
+      if (productsSnapshot.empty) {
         setProducts([]);
         setFilteredProducts([]);
         setLoading(false);
@@ -168,12 +168,22 @@ const ProductList: React.FC = () => {
       }
       
       // Save the last document for pagination
-      setLastVisibleProduct(snapshot.docs[snapshot.docs.length - 1]);
+      setLastVisibleProduct(productsSnapshot.docs[productsSnapshot.docs.length - 1]);
       
-      const productsData = snapshot.docs.map(doc => ({
+      let productsData = productsSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       })) as Product[];
+      
+      // Apply search filter (client-side)
+      if (searchQuery) {
+        const lowerCaseQuery = searchQuery.toLowerCase();
+        productsData = productsData.filter(product => 
+          (product.name?.toLowerCase() || '').includes(lowerCaseQuery) || 
+          (product.barcode?.toLowerCase() || '').includes(lowerCaseQuery) ||
+          (product.description?.toLowerCase() || '').includes(lowerCaseQuery)
+        );
+      }
       
       setProducts(productsData);
       setFilteredProducts(productsData);
@@ -197,23 +207,21 @@ const ProductList: React.FC = () => {
       setLastVisibleProduct(null);
       fetchProducts(0);
     }
-  }, [selectedCategory, selectedLocation, selectedProvider, sortField, sortDirection]);
+  }, [searchQuery, selectedCategory, selectedLocation, selectedProvider, sortField, sortDirection]);
   
   // Apply search filter immediately on searchQuery change
   useEffect(() => {
-    if (!searchQuery.trim() || searchQuery.trim().length < 3) {
+    if (searchQuery) {
+      const lowerCaseQuery = searchQuery.toLowerCase();
+      const filtered = products.filter(product => 
+        (product.name?.toLowerCase() || '').includes(lowerCaseQuery) || 
+        (product.barcode?.toLowerCase() || '').includes(lowerCaseQuery) ||
+        (product.description?.toLowerCase() || '').includes(lowerCaseQuery)
+      );
+      setFilteredProducts(filtered);
+    } else {
       setFilteredProducts(products);
-      return;
     }
-    
-    const lowerCaseQuery = searchQuery.toLowerCase();
-    const filtered = products.filter(product => 
-      (product.name?.toLowerCase() || '').includes(lowerCaseQuery) || 
-      (product.barcode?.toLowerCase() || '').includes(lowerCaseQuery) ||
-      (product.description?.toLowerCase() || '').includes(lowerCaseQuery)
-    );
-    setFilteredProducts(filtered);
-    setCurrentPage(0);
   }, [products, searchQuery]);
 
   const handleSort = (field: keyof Product) => {

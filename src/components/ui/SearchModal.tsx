@@ -16,9 +16,6 @@ import {
   Truck,
   ArrowDown,
   ArrowUp,
-  Trash,
-  Clipboard,
-  List
 } from 'lucide-react';
 import { 
   collection, 
@@ -56,7 +53,7 @@ type SearchResult = {
 };
 
 // Define mode type
-type ModalMode = 'inventory' | 'shipping' | 'receiving' | 'multi-scan';
+type ModalMode = 'inventory' | 'shipping' | 'receiving';
 
 // Search Mode Tabs Component
 const SearchModeTabs: React.FC<{
@@ -99,18 +96,6 @@ const SearchModeTabs: React.FC<{
       >
         <ArrowDown className="h-3.5 w-3.5 sm:h-4 sm:w-4 mx-auto mb-1" />
         Receiving
-      </button>
-
-      <button
-        onClick={() => handleModeChange('multi-scan')}
-        className={`flex-1 text-center py-2 text-xs sm:text-sm font-medium focus:outline-none ${
-          mode === 'multi-scan' 
-            ? 'text-indigo-600 border-b-2 border-indigo-600' 
-            : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
-        }`}
-      >
-        <List className="h-3.5 w-3.5 sm:h-4 sm:w-4 mx-auto mb-1" />
-        Multi-Scan
       </button>
     </div>
   );
@@ -369,13 +354,11 @@ const SearchResultsList: React.FC<{
     return (
       <div className="py-4 px-2">
         <p className="text-xs sm:text-sm text-center text-gray-500">
-          {mode === 'multi-scan' 
-            ? 'Scan multiple products to build a list'
-            : mode === 'shipping' 
-              ? 'Scan a product barcode to ship out items' 
-              : mode === 'receiving'
-                ? 'Scan a product barcode to receive new stock'
-                : 'Type to search or scan a barcode'
+          {mode === 'shipping' 
+            ? 'Scan a product barcode to ship out items' 
+            : mode === 'receiving'
+              ? 'Scan a product barcode to receive new stock'
+              : 'Type to search or scan a barcode'
           }
         </p>
         
@@ -385,23 +368,18 @@ const SearchResultsList: React.FC<{
             <li className="flex items-start">
               <span className="mr-1.5">•</span>
               <span>
-                {mode === 'multi-scan'
-                  ? 'Scan multiple products to view them all in a list'
-                  : mode === 'shipping' 
-                    ? 'Scan products to quickly reduce inventory for shipping'
-                    : mode === 'receiving'
-                      ? 'Scan products to quickly add inventory when receiving stock'
-                      : 'Search by name, barcode, or scan products directly'
+                {mode === 'shipping' 
+                  ? 'Scan products to quickly reduce inventory for shipping'
+                  : mode === 'receiving'
+                    ? 'Scan products to quickly add inventory when receiving stock'
+                    : 'Search by name, barcode, or scan products directly'
                 }
               </span>
             </li>
             <li className="flex items-start">
               <span className="mr-1.5">•</span>
               <span>
-                {mode === 'multi-scan'
-                  ? 'Click on a product to view its details'
-                  : 'You can adjust the quantity before confirming'
-                }
+                You can adjust the quantity before confirming
               </span>
             </li>
             <li className="flex items-start">
@@ -464,76 +442,6 @@ const SearchResultsList: React.FC<{
   );
 };
 
-// ScannedItemsList Component for Multi-Scan Mode
-const ScannedItemsList: React.FC<{
-  scannedItems: Product[];
-  handleItemClick: (product: Product) => void;
-  clearScannedItems: () => void;
-}> = ({ scannedItems, handleItemClick, clearScannedItems }) => {
-  return (
-    <div className="border-b border-gray-200 p-3 sm:p-4">
-      <div className="flex justify-between items-center mb-3">
-        <h3 className="text-xs sm:text-sm font-semibold text-gray-900">
-          Scanned Products <span className="text-gray-500">({scannedItems.length})</span>
-        </h3>
-        {scannedItems.length > 0 && (
-          <button
-            onClick={clearScannedItems}
-            className="inline-flex items-center text-xs text-red-600 hover:text-red-800"
-          >
-            <Trash className="h-3.5 w-3.5 mr-1" />
-            Clear All
-          </button>
-        )}
-      </div>
-      
-      {scannedItems.length === 0 ? (
-        <div className="bg-gray-50 rounded-md p-4 flex flex-col items-center justify-center">
-          <Clipboard className="h-10 w-10 text-gray-300 mb-2" />
-          <p className="text-sm text-gray-500 text-center">No products scanned yet. Scan a barcode to add products.</p>
-        </div>
-      ) : (
-        <div className="space-y-2 max-h-60 overflow-y-auto">
-          {scannedItems.map((item) => (
-            <div
-              key={item.id} 
-              className="bg-gray-50 hover:bg-gray-100 rounded-md p-2 cursor-pointer transition-colors"
-              onClick={() => handleItemClick(item)}
-            >
-              <div className="flex items-start">
-                <div className="h-10 w-10 bg-indigo-100 rounded-md flex items-center justify-center mr-3">
-                  <Package className="h-5 w-5 text-indigo-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs sm:text-sm font-medium text-gray-900 truncate">{item.name}</p>
-                    <span className="ml-2 rounded bg-indigo-100 px-1.5 py-0.5 text-xs font-medium text-indigo-800">
-                      Qty: {item.quantity}
-                    </span>
-                  </div>
-                  {item.barcode && (
-                    <p className="mt-1 text-xs text-gray-500">Barcode: {item.barcode}</p>
-                  )}
-                </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    window.open(`/products/${item.id}`, '_blank');
-                  }}
-                  className="ml-2 text-indigo-600 hover:text-indigo-800"
-                  title="Open in new tab"
-                >
-                  <ArrowRight className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
 // Product Detail View Component
 const ProductDetailView: React.FC<{
   productToUpdate: Product;
@@ -546,7 +454,6 @@ const ProductDetailView: React.FC<{
   updateProductQuantity: () => void;
   getQuantityActionText: () => string;
   ProductQuantityComponent: JSX.Element;
-  addToScannedItems?: (product: Product) => void;
 }> = ({
   productToUpdate,
   mode,
@@ -557,16 +464,14 @@ const ProductDetailView: React.FC<{
   isUpdating,
   updateProductQuantity,
   getQuantityActionText,
-  ProductQuantityComponent,
-  addToScannedItems
+  ProductQuantityComponent
 }) => {
   return (
     <div className="border-b border-gray-200 p-3 sm:p-4">
       <div className="mb-3 sm:mb-4 flex items-center justify-between">
         <h3 className="text-base sm:text-lg font-semibold text-gray-900">
           {mode === 'shipping' ? 'Ship Product' : 
-           mode === 'receiving' ? 'Receive Product' :
-           mode === 'multi-scan' ? 'Product Found' :
+           mode === 'receiving' ? 'Receive Product' : 
            'Product Found'}
         </h3>
         <div className="rounded bg-indigo-100 px-2 py-1 text-xs font-medium text-indigo-800">
@@ -626,7 +531,7 @@ const ProductDetailView: React.FC<{
         </div>
       </div>
       
-      {mode !== 'multi-scan' && ProductQuantityComponent}
+      {ProductQuantityComponent}
       
       <div className="mt-4 flex justify-between">
         <button
@@ -643,50 +548,32 @@ const ProductDetailView: React.FC<{
           <ArrowRight className="ml-1 sm:ml-2 h-3 w-3 sm:h-4 sm:w-4" />
         </button>
         
-        {mode === 'multi-scan' ? (
-          <button
-            onClick={() => {
-              if (addToScannedItems) {
-                addToScannedItems(productToUpdate);
-                resetAllStates();
-                if (searchInputRef.current) {
-                  searchInputRef.current.focus();
-                }
-              }
-            }}
-            className="inline-flex items-center rounded px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-          >
-            <Plus className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
-            Add to List
-          </button>
-        ) : (
-          <button
-            onClick={updateProductQuantity}
-            disabled={isUpdating || (mode === 'inventory' && newQuantity === productToUpdate.quantity)}
-            className={`inline-flex items-center rounded px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 ${
-              mode === 'shipping' 
-                ? 'bg-red-600 hover:bg-red-700 focus:ring-red-500' 
-                : mode === 'receiving'
-                  ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500'
-                  : 'bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500'
-            }`}
-          >
-            {isUpdating ? (
-              <>
-                <Loader2 className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
-                Updating...
-              </>
-            ) : (
-              getQuantityActionText()
-            )}
-          </button>
-        )}
+        <button
+          onClick={updateProductQuantity}
+          disabled={isUpdating || (mode === 'inventory' && newQuantity === productToUpdate.quantity)}
+          className={`inline-flex items-center rounded px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 ${
+            mode === 'shipping' 
+              ? 'bg-red-600 hover:bg-red-700 focus:ring-red-500' 
+              : mode === 'receiving'
+                ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500'
+                : 'bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500'
+          }`}
+        >
+          {isUpdating ? (
+            <>
+              <Loader2 className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
+              Updating...
+            </>
+          ) : (
+            getQuantityActionText()
+          )}
+        </button>
       </div>
     </div>
   );
 };
 
-// Default Adjustment Control Component
+// Default Adjustment Component
 const DefaultAdjustmentControl: React.FC<{
   mode: ModalMode;
   adjustmentAmount: number;
@@ -730,9 +617,6 @@ const DefaultAdjustmentControl: React.FC<{
   );
 };
 
-// Reference to the search input element
-let searchInputRef: React.RefObject<HTMLInputElement>;
-
 // Main SearchModal Component
 const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
   const { currentUser } = useAuth();
@@ -755,11 +639,8 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
   // Product not found state
   const [isProductNotFound, setIsProductNotFound] = useState(false);
   const [scannedBarcode, setScannedBarcode] = useState('');
-
-  // State for multi-scan mode
-  const [scannedItems, setScannedItems] = useState<Product[]>([]);
   
-  searchInputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   
@@ -772,7 +653,7 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
 
   // Keep the search input focused in shipping mode
   useEffect(() => {
-    if (isOpen && (mode === 'shipping' || mode === 'multi-scan') && searchInputRef.current) {
+    if (isOpen && mode === 'shipping' && searchInputRef.current) {
       searchInputRef.current.focus();
     }
   }, [isOpen, mode, statusMessage]);
@@ -816,7 +697,6 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
   useEffect(() => {
     if (!isOpen) {
       resetAllStates();
-      setScannedItems([]);
     }
   }, [isOpen]);
   
@@ -841,16 +721,8 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
           const result = searchResults[activeIndex];
           handleResultClick(result);
         } else if (isBarcodeMatch && productToUpdate) {
-          // In multi-scan mode, add the product to the scanned items list
-          if (mode === 'multi-scan') {
-            addToScannedItems(productToUpdate);
-            resetAllStates();
-            if (searchInputRef.current) {
-              searchInputRef.current.focus();
-            }
-          }
           // Navigate to product details if it's a barcode match in inventory mode
-          else if (mode === 'inventory') {
+          if (mode === 'inventory') {
             navigate(`/products/${productToUpdate.id}`);
             resetAllStates();
             onClose();
@@ -864,7 +736,7 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, activeIndex, searchResults, navigate, onClose, isBarcodeMatch, productToUpdate, mode, scannedItems]);
+  }, [isOpen, activeIndex, searchResults, navigate, onClose, isBarcodeMatch, productToUpdate, mode]);
   
   // Search function
   const performSearch = async () => {
@@ -927,38 +799,23 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
         
         setProductToUpdate(product);
         
-        // In multi-scan mode, add the product to the scanned items list
-        if (mode === 'multi-scan') {
-          // Check if the product is already in the list to avoid duplicates
-          if (!scannedItems.some(item => item.id === product.id)) {
-            addToScannedItems(product);
-            // Reset search state but keep the scanned items
-            resetSearchStateOnly();
-            if (searchInputRef.current) {
-              searchInputRef.current.focus();
-            }
-            setIsLoading(false);
-            return;
-          }
+        // Set new quantity based on the mode
+        if (mode === 'shipping') {
+          // For shipping, default to removing 1 unit
+          setNewQuantity(Math.max(0, product.quantity - adjustmentAmount));
+          // Auto-decrease in shipping mode
+          await updateProductQuantity(product, Math.max(0, product.quantity - adjustmentAmount));
+          return; // Stop further processing
+        } else if (mode === 'receiving') {
+          // For receiving, default to adding 1 unit
+          setNewQuantity(product.quantity + adjustmentAmount);
         } else {
-          // Set new quantity based on the mode
-          if (mode === 'shipping') {
-            // For shipping, default to removing 1 unit
-            setNewQuantity(Math.max(0, product.quantity - adjustmentAmount));
-            // Auto-decrease in shipping mode
-            await updateProductQuantity(product, Math.max(0, product.quantity - adjustmentAmount));
-            return; // Stop further processing
-          } else if (mode === 'receiving') {
-            // For receiving, default to adding 1 unit
-            setNewQuantity(product.quantity + adjustmentAmount);
-          } else {
-            // For inventory mode, just show the current quantity
-            setNewQuantity(product.quantity);
-          }
-          
-          setIsBarcodeMatch(true);
-          setShowProductModal(true);
+          // For inventory mode, just show the current quantity
+          setNewQuantity(product.quantity);
         }
+        
+        setIsBarcodeMatch(true);
+        setShowProductModal(true);
         
         // Add to results
         results.push({
@@ -984,13 +841,13 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
         productsSnapshot.docs.forEach(doc => {
           const product = doc.data() as Product;
           if (
-            (product.name?.toLowerCase() || '').includes(lowerQuery) ||
+            product.name.toLowerCase().includes(lowerQuery) ||
             (product.description?.toLowerCase() || '').includes(lowerQuery) ||
             (product.barcode?.toLowerCase() || '').includes(lowerQuery)
           ) {
             results.push({
               id: doc.id,
-              name: product.name || '',
+              name: product.name,
               type: 'product',
               barcode: product.barcode,
               description: product.description,
@@ -1007,12 +864,12 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
           categoriesSnapshot.docs.forEach(doc => {
             const category = doc.data() as ProductCategory;
             if (
-              (category.name?.toLowerCase() || '').includes(lowerQuery) ||
+              category.name.toLowerCase().includes(lowerQuery) ||
               (category.description?.toLowerCase() || '').includes(lowerQuery)
             ) {
               results.push({
                 id: doc.id,
-                name: category.name || '',
+                name: category.name,
                 type: 'category',
                 description: category.description
               });
@@ -1024,12 +881,12 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
           locationsSnapshot.docs.forEach(doc => {
             const location = doc.data() as Location;
             if (
-              (location.name?.toLowerCase() || '').includes(lowerQuery) ||
+              location.name.toLowerCase().includes(lowerQuery) ||
               (location.description?.toLowerCase() || '').includes(lowerQuery)
             ) {
               results.push({
                 id: doc.id,
-                name: location.name || '',
+                name: location.name,
                 type: 'location',
                 description: location.description
               });
@@ -1041,12 +898,12 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
           typesSnapshot.docs.forEach(doc => {
             const productType = doc.data() as ProductType;
             if (
-              (productType.name?.toLowerCase() || '').includes(lowerQuery) ||
+              productType.name.toLowerCase().includes(lowerQuery) ||
               (productType.description?.toLowerCase() || '').includes(lowerQuery)
             ) {
               results.push({
                 id: doc.id,
-                name: productType.name || '',
+                name: productType.name,
                 type: 'productType',
                 description: productType.description
               });
@@ -1069,76 +926,6 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
       setSearchQuery('');
     }
   };
-
-  // Function to reset only search state but keep scanned items
-  const resetSearchStateOnly = () => {
-    setSearchQuery('');
-    setSearchResults([]);
-    setError(null);
-    setActiveIndex(-1);
-    setIsBarcodeMatch(false);
-    setProductToUpdate(null);
-    setShowProductModal(false);
-    setStatusMessage(null);
-    setIsProductNotFound(false);
-    setScannedBarcode('');
-    if (searchInputRef.current) {
-      searchInputRef.current.value = '';
-    }
-  };
-
-  // Add a product to scanned items list
-  const addToScannedItems = (product: Product) => {
-    // Check if the product is already in the list to avoid duplicates
-    if (!scannedItems.some(item => item.id === product.id)) {
-      setScannedItems(prev => [...prev, product]);
-      setStatusMessage(`Added ${product.name} to scanned items`);
-      
-      // Clear the status message after 2 seconds
-      setTimeout(() => {
-        setStatusMessage(null);
-        // Refocus the search input for next scan
-        if (searchInputRef.current) {
-          searchInputRef.current.focus();
-        }
-      }, 2000);
-    } else {
-      setStatusMessage(`${product.name} is already in the scanned items list`);
-      
-      // Clear the status message after 2 seconds
-      setTimeout(() => {
-        setStatusMessage(null);
-        // Refocus the search input for next scan
-        if (searchInputRef.current) {
-          searchInputRef.current.focus();
-        }
-      }, 2000);
-    }
-  };
-
-  // Clear the scanned items list
-  const clearScannedItems = () => {
-    setScannedItems([]);
-    setStatusMessage('Cleared all scanned items');
-    
-    // Clear the status message after 2 seconds
-    setTimeout(() => {
-      setStatusMessage(null);
-      // Refocus the search input
-      if (searchInputRef.current) {
-        searchInputRef.current.focus();
-      }
-    }, 2000);
-  };
-
-  // Handle when a user clicks on a scanned item
-  const handleScannedItemClick = (product: Product) => {
-    // Navigate to product details page
-    const productId = product.id;
-    resetAllStates();
-    navigate(`/products/${productId}`);
-    onClose();
-  };
   
   // Debounced search
   useEffect(() => {
@@ -1152,14 +939,7 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
   // Handle mode change
   const handleModeChange = (newMode: ModalMode) => {
     setMode(newMode);
-    
-    // If switching to multi-scan mode, keep scanned items, otherwise reset all states
-    if (newMode !== 'multi-scan') {
-      resetAllStates();
-      setScannedItems([]);
-    } else {
-      resetSearchStateOnly();
-    }
+    resetAllStates();
     
     // Set default adjustment amount based on mode
     setAdjustmentAmount(1);
@@ -1173,11 +953,7 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
   const handleResultClick = (result: SearchResult) => {
     switch (result.type) {
       case 'product':
-        if (mode === 'multi-scan') {
-          // In multi-scan mode, fetch the product and add it to the scanned items list
-          fetchProductDetails(result.id, true);
-        }
-        else if (mode === 'inventory') {
+        if (mode === 'inventory') {
           // Reset states before navigating to prevent issues with subsequent searches
           const productId = result.id;
           resetAllStates();
@@ -1212,7 +988,7 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
     }
   };
   
-  const fetchProductDetails = async (productId: string, addToList: boolean = false) => {
+  const fetchProductDetails = async (productId: string) => {
     try {
       setIsLoading(true);
       const productDoc = await getDoc(doc(db, 'products', productId));
@@ -1224,14 +1000,6 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
         } as Product;
         
         setProductToUpdate(product);
-        
-        // In multi-scan mode, add to scanned items and return
-        if (mode === 'multi-scan' && addToList) {
-          addToScannedItems(product);
-          resetSearchStateOnly();
-          setIsLoading(false);
-          return;
-        }
         
         // Set new quantity based on the mode
         if (mode === 'shipping') {
@@ -1409,8 +1177,6 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
   
   const getModeDescription = () => {
     switch (mode) {
-      case 'multi-scan':
-        return 'Scan multiple product barcodes to build a list without automatic redirection';
       case 'shipping':
         return 'Scan product barcodes to quickly decrease inventory for shipping or pick & pack operations';
       case 'receiving':
@@ -1422,8 +1188,6 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
   
   const getSearchPlaceholder = () => {
     switch (mode) {
-      case 'multi-scan':
-        return 'Scan multiple barcodes or search products...';
       case 'shipping':
         return 'Scan product barcode to ship out...';
       case 'receiving':
@@ -1522,15 +1286,6 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
             </div>
           </div>
           
-          {/* Scanned Items List for Multi-Scan Mode */}
-          {mode === 'multi-scan' && (
-            <ScannedItemsList 
-              scannedItems={scannedItems}
-              handleItemClick={handleScannedItemClick}
-              clearScannedItems={clearScannedItems}
-            />
-          )}
-          
           {/* Adjustment quantity for shipping/receiving modes */}
           {(mode === 'shipping' || mode === 'receiving') && !showProductModal && !isProductNotFound && (
             <DefaultAdjustmentControl 
@@ -1574,7 +1329,6 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
                   getQuantityLabel={getQuantityLabel}
                 />
               }
-              addToScannedItems={addToScannedItems}
             />
           )}
           

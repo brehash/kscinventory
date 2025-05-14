@@ -206,24 +206,6 @@ const ProductList: React.FC = () => {
     fetchProducts(newPage);
   };
 
-  // Add keyboard navigation for pagination
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowLeft' && currentPage > 0) {
-        e.preventDefault();
-        handlePageClick({ selected: currentPage - 1 });
-      } else if (e.key === 'ArrowRight' && currentPage < pageCount - 1) {
-        e.preventDefault();
-        handlePageClick({ selected: currentPage + 1 });
-      }
-    };
-    
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [currentPage, pageCount]);
-
   useEffect(() => {
     if (!loading) {
       setCurrentPage(0);

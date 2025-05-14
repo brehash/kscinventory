@@ -626,7 +626,11 @@ const OrderList: React.FC = () => {
       'refuzata': { bg: 'bg-red-100', text: 'text-red-800', icon: <XCircle className="h-3 w-3 mr-1" /> }
     };
     
-    const config = statusConfig[status];
+    // Default configuration for unknown statuses
+    const defaultConfig = { bg: 'bg-gray-100', text: 'text-gray-800', icon: <AlertCircle className="h-3 w-3 mr-1" /> };
+    
+    // Use the status config if it exists, otherwise use default config
+    const config = statusConfig[status] || defaultConfig;
     
     return (
       <span className={`${config.bg} ${config.text} text-xs px-2 py-1 rounded-full flex items-center`}>

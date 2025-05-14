@@ -157,7 +157,7 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
             updateProductQuantity();
           }
         }
-        console.log(searchQuery)
+        
       }
 
       

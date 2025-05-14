@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, getDocs, where, limit, startAfter, getCountFromServer } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs, where, limit, startAfter, getCountFromServer, onSnapshot } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { DashboardStats, Product, LowStockAlert, OrderStats, OrdersByStatusData, OrdersByMonthData, Order } from '../../types';
 import { format, parseISO, isValid, isBefore, isAfter, isSameDay, subMonths, startOfMonth, endOfMonth } from 'date-fns';

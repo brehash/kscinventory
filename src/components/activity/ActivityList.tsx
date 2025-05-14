@@ -179,24 +179,6 @@ const ActivityList: React.FC = () => {
     fetchActivities(newPage);
   };
   
-  // Add keyboard navigation for pagination
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowLeft' && currentPage > 0) {
-        e.preventDefault();
-        handlePageClick({ selected: currentPage - 1 });
-      } else if (e.key === 'ArrowRight' && currentPage < pageCount - 1) {
-        e.preventDefault();
-        handlePageClick({ selected: currentPage + 1 });
-      }
-    };
-    
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [currentPage, pageCount]);
-  
   const handleToggleSortDirection = () => {
     setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
   };
@@ -420,7 +402,7 @@ const ActivityList: React.FC = () => {
             <select
               id="entityType"
               value={selectedEntityType}
-              onChange={(e) => setSelectedEntityType(e.target.value as ActivityEntityType)}
+              onChange={(e) => setSelectedEntityType(e.target.value as EntityType)}
               className="block w-full px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
             >
               <option value="">All Entities</option>

@@ -1,11 +1,16 @@
-import React, { useEffect, useState } from 'react';
-import { collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
+import React, { useState, useEffect } from 'react';
+import { collection, query, orderBy, getDocs, where, limit, startAfter, getCountFromServer } from 'firebase/firestore';
 import { db } from '../../config/firebase';
-import { DashboardStats, Product, LowStockAlert } from '../../types';
+import { DashboardStats, Product, LowStockAlert, OrderStats, OrdersByStatusData, OrdersByMonthData, Order } from '../../types';
+import { format, parseISO, isValid, isBefore, isAfter, isSameDay, subMonths, startOfMonth, endOfMonth } from 'date-fns';
+import { Calendar, Filter, ArrowUp, ArrowDown, User, Clock, Activity, AlertCircle, Loader2, Edit, Trash, Plus, Minus, ChevronLeft, ChevronRight, Package, DollarSign, AlertTriangle, TrendingUp, ShoppingBag } from 'lucide-react';
 import StatCard from './StatCard';
 import LowStockAlerts from './LowStockAlerts';
 import InventoryChart from './InventoryChart';
-import { Package, DollarSign, AlertTriangle, TrendingUp } from 'lucide-react';
+import { format, parseISO, isValid, isBefore, isAfter, isSameDay } from 'date-fns';
+import { Calendar, Filter, ArrowUp, ArrowDown, User, Clock, Activity, AlertCircle, Loader2, Edit, Trash, Plus, Minus, ChevronLeft, ChevronRight } from 'lucide-react';
+import ReactPaginate from 'react-paginate';
+import { useNavigate } from 'react-router-dom';
 import ValueByCategory from './ValueByCategory';
 import ValueByLocation from './ValueByLocation';
 import ValueByProductType from './ValueByProductType';
@@ -15,9 +20,28 @@ import SellingValueByLocation from './SellingValueByLocation';
 import SellingValueByProductType from './SellingValueByProductType';
 import SellingValueByProvider from './SellingValueByProvider';
 import RecentActivity from './RecentActivity';
+import OrderStatistics from './OrderStatistics';
+import OrdersChart from './OrdersChart';
 
 const Dashboard: React.FC = () => {
-  // Cost-based state variables
+  const navigate = useNavigate();
+  // State for activity logs
+  const [activities, setActivities] = useState<ActivityLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  // State for filters
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+  const [selectedUser, setSelectedUser] = useState<string>('');
+  const [selectedActivityType, setSelectedActivityType] = useState<ActivityType | ''>('');
+  const [selectedEntityType, setSelectedEntityType] = useState<ActivityEntityType | ''>('');
+  const [users, setUsers] = useState<{id: string, name: string}[]>([]);
+  const [activityTypes, setActivityTypes] = useState<ActivityType[]>([]);
+  const [entityTypes, setEntityTypes] = useState<ActivityEntityType[]>([]);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  
+  // State for inventory stats
   const [stats, setStats] = useState<DashboardStats>({
     totalProducts: 0,
     totalValue: 0,
@@ -26,7 +50,21 @@ const Dashboard: React.FC = () => {
     lowStockItems: 0,
     categoriesCount: 0
   });
-  const [loading, setLoading] = useState(true);
+  
+  // State for order stats
+  const [orderStats, setOrderStats] = useState<OrderStats>({
+    totalOrders: 0,
+    totalRevenue: 0,
+    pendingOrders: 0,
+    processingOrders: 0,
+    completedOrders: 0,
+    cancelledOrders: 0,
+    averageOrderValue: 0
+  });
+  const [ordersByStatus, setOrdersByStatus] = useState<OrdersByStatusData[]>([]);
+  const [ordersByMonth, setOrdersByMonth] = useState<OrdersByMonthData[]>([]);
+  
+  // State for low stock alerts
   const [lowStockAlerts, setLowStockAlerts] = useState<LowStockAlert[]>([]);
   
   // Cost-based values (using cost price)
@@ -289,10 +327,122 @@ const Dashboard: React.FC = () => {
         }
         setLowStockAlerts(alerts);
         
+        // Fetch order data for statistics
+        await fetchOrderStats();
+        
         setLoading(false);
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
         setLoading(false);
+      }
+    };
+
+    const fetchOrderStats = async () => {
+      try {
+        const ordersRef = collection(db, 'orders');
+        const ordersSnapshot = await getDocs(ordersRef);
+        
+        if (ordersSnapshot.empty) {
+          return;
+        }
+
+        const orders = ordersSnapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            orderDate: data.orderDate?.toDate() || new Date(),
+            createdAt: data.createdAt?.toDate() || new Date(),
+            updatedAt: data.updatedAt?.toDate() || new Date()
+          } as Order;
+        });
+
+        // Calculate order stats
+        const totalOrders = orders.length;
+        const totalRevenue = orders.reduce((sum, order) => sum + order.total, 0);
+        const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+
+        // Count orders by status
+        const pendingOrders = orders.filter(order => 
+          order.status === 'pending' || 
+          order.status === 'on-hold'
+        ).length;
+        
+        const processingOrders = orders.filter(order => 
+          order.status === 'processing' || 
+          order.status === 'preluata' || 
+          order.status === 'pregatita' || 
+          order.status === 'impachetata'
+        ).length;
+        
+        const completedOrders = orders.filter(order => 
+          order.status === 'completed' || 
+          order.status === 'expediata'
+        ).length;
+        
+        const cancelledOrders = orders.filter(order => 
+          order.status === 'cancelled' || 
+          order.status === 'refunded' || 
+          order.status === 'failed' || 
+          order.status === 'returnata' ||
+          order.status === 'refuzata' ||
+          order.status === 'neonorata'
+        ).length;
+
+        setOrderStats({
+          totalOrders,
+          totalRevenue,
+          pendingOrders,
+          processingOrders,
+          completedOrders,
+          cancelledOrders,
+          averageOrderValue
+        });
+
+        // Prepare data for order status chart
+        const ordersByStatusData: OrdersByStatusData[] = [
+          { name: 'Pending', value: pendingOrders, color: '#f59e0b' },
+          { name: 'Processing', value: processingOrders, color: '#3b82f6' },
+          { name: 'Completed', value: completedOrders, color: '#10b981' },
+          { name: 'Cancelled', value: cancelledOrders, color: '#ef4444' }
+        ];
+        
+        setOrdersByStatus(ordersByStatusData);
+
+        // Prepare data for orders by month chart
+        // Get last 6 months
+        const today = new Date();
+        const last6Months: Date[] = [];
+        
+        for (let i = 0; i < 6; i++) {
+          last6Months.push(startOfMonth(subMonths(today, i)));
+        }
+        
+        // Reverse to get chronological order
+        last6Months.reverse();
+        
+        const monthlyData: OrdersByMonthData[] = last6Months.map(monthStart => {
+          const monthEnd = endOfMonth(monthStart);
+          const monthName = format(monthStart, 'MMM');
+          
+          const monthOrders = orders.filter(order => 
+            order.orderDate >= monthStart && order.orderDate <= monthEnd
+          );
+          
+          const count = monthOrders.length;
+          const revenue = monthOrders.reduce((sum, order) => sum + order.total, 0);
+          
+          return {
+            name: monthName,
+            count,
+            revenue
+          };
+        });
+        
+        setOrdersByMonth(monthlyData);
+
+      } catch (error) {
+        console.error('Error fetching order statistics:', error);
       }
     };
 
@@ -321,6 +471,7 @@ const Dashboard: React.FC = () => {
         <p className="text-sm sm:text-base text-gray-600">Overview of your inventory status</p>
       </div>
 
+      {/* Inventory Statistics */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
         <StatCard 
           title="Total Products" 
@@ -348,8 +499,8 @@ const Dashboard: React.FC = () => {
           tooltipText="Number of products with stock levels at or below their minimum quantity threshold. These items may need to be reordered soon to prevent stockouts."
         />
       </div>
+      
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-6">
-        
         <StatCard 
           title="Inventory Cost Value" 
           value={`${stats.totalValue.toLocaleString()} RON`} 
@@ -366,10 +517,60 @@ const Dashboard: React.FC = () => {
           iconColor="text-purple-600"
           tooltipText="The total selling value of all inventory items. Calculated by multiplying each product's selling price by its current quantity and summing across all products in stock."
         />
-        
       </div>
       
+      {/* Order Statistics */}
+      <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm">
+        <h2 className="text-lg sm:text-xl font-bold mb-4 sm:mb-6">Order Statistics</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+          <StatCard 
+            title="Total Orders" 
+            value={orderStats.totalOrders} 
+            icon={<ShoppingBag className="h-5 w-5 sm:h-6 sm:w-6" />}
+            iconBg="bg-indigo-100"
+            iconColor="text-indigo-600"
+            tooltipText="The total number of orders in the system."
+          />
+          <StatCard 
+            title="Total Revenue" 
+            value={`${orderStats.totalRevenue.toLocaleString()} RON`} 
+            icon={<DollarSign className="h-5 w-5 sm:h-6 sm:w-6" />}
+            iconBg="bg-green-100"
+            iconColor="text-green-600"
+            tooltipText="The total revenue from all orders."
+          />
+          <StatCard 
+            title="Average Order Value" 
+            value={`${orderStats.averageOrderValue.toLocaleString()} RON`} 
+            icon={<DollarSign className="h-5 w-5 sm:h-6 sm:w-6" />}
+            iconBg="bg-amber-100"
+            iconColor="text-amber-600"
+            tooltipText="The average value of all orders."
+          />
+          <StatCard 
+            title="Processing Orders" 
+            value={orderStats.processingOrders} 
+            icon={<ShoppingBag className="h-5 w-5 sm:h-6 sm:w-6" />}
+            iconBg="bg-blue-100"
+            iconColor="text-blue-600"
+            tooltipText="The number of orders currently being processed."
+          />
+        </div>
+      </div>
       
+      {/* Order Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-6">
+        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm">
+          <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4">Orders by Status</h3>
+          <OrderStatistics data={ordersByStatus} />
+        </div>
+        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm">
+          <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4">Orders by Month</h3>
+          <OrdersChart data={ordersByMonth} />
+        </div>
+      </div>
+      
+      {/* Cost Value Analysis */}
       <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm">
         <h2 className="text-lg sm:text-xl font-bold mb-4 sm:mb-6">Cost Value Analysis</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">

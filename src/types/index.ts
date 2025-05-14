@@ -93,6 +93,29 @@ export interface LowStockAlert {
   locationName: string;
 }
 
+// Order Statistics Types
+export interface OrderStats {
+  totalOrders: number;
+  totalRevenue: number;
+  pendingOrders: number;
+  processingOrders: number;
+  completedOrders: number;
+  cancelledOrders: number;
+  averageOrderValue: number;
+}
+
+export interface OrdersByStatusData {
+  name: string; // Status name
+  value: number; // Number of orders
+  color: string; // Color for charts
+}
+
+export interface OrdersByMonthData {
+  name: string; // Month
+  count: number; // Number of orders
+  revenue: number; // Total revenue
+}
+
 // Activity Log Types
 export type ActivityType = 'added' | 'removed' | 'updated' | 'deleted';
 export type ActivityEntityType = 'product' | 'category' | 'location' | 'productType' | 'provider' | 'order';
@@ -190,6 +213,7 @@ export type OrderStatus =
   | 'failed'
   | 'preluata'
   | 'pregatita'  // New status replacing 'impachetata'
+  | 'impachetata'
   | 'expediata'
   | 'returnata'
   | 'refuzata'

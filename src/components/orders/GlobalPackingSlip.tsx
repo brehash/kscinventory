@@ -740,7 +740,7 @@ const GlobalPackingSlip: React.FC = () => {
               type="text"
               value={barcode}
               onChange={handleBarcodeChange}
-              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+              className="block w-full rounded-md border-gray-500 p-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
               placeholder="Scan barcode or enter manually..."
               aria-label="Barcode scanner input"
               autoFocus

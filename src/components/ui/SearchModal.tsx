@@ -244,8 +244,8 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
           const product = doc.data() as Product;
           if (
             product.name.toLowerCase().includes(lowerQuery) ||
-            product.description.toLowerCase().includes(lowerQuery) ||
-            (product.barcode && product.barcode.toLowerCase().includes(lowerQuery))
+            (product.description?.toLowerCase() || '').includes(lowerQuery) ||
+            (product.barcode?.toLowerCase() || '').includes(lowerQuery)
           ) {
             results.push({
               id: doc.id,
@@ -267,7 +267,7 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
             const category = doc.data() as ProductCategory;
             if (
               category.name.toLowerCase().includes(lowerQuery) ||
-              category.description.toLowerCase().includes(lowerQuery)
+              (category.description?.toLowerCase() || '').includes(lowerQuery)
             ) {
               results.push({
                 id: doc.id,
@@ -284,7 +284,7 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
             const location = doc.data() as Location;
             if (
               location.name.toLowerCase().includes(lowerQuery) ||
-              location.description.toLowerCase().includes(lowerQuery)
+              (location.description?.toLowerCase() || '').includes(lowerQuery)
             ) {
               results.push({
                 id: doc.id,
@@ -301,7 +301,7 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
             const productType = doc.data() as ProductType;
             if (
               productType.name.toLowerCase().includes(lowerQuery) ||
-              productType.description.toLowerCase().includes(lowerQuery)
+              (productType.description?.toLowerCase() || '').includes(lowerQuery)
             ) {
               results.push({
                 id: doc.id,

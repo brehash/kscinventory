@@ -198,6 +198,7 @@ export type OrderStatus =
   | 'refunded' 
   | 'failed'
   | 'draft'
+  | 'checkout-draft'
   | 'preluata'
   | 'pregatita'  // New status replacing 'impachetata'
   | 'impachetata'

@@ -269,11 +269,11 @@ const createOrUpdateClient = async (
   email: string,
   phone?: string,
   billingAddress?: Address
-): Promise<string | undefined> => {
+): Promise<string | null> => {
   try {
     if (!email) {
       console.log('No email provided for client, skipping CRM sync');
-      return undefined;
+      return null;
     }
     
     // console.log(`Checking if client exists with email: ${email}`);
@@ -343,7 +343,7 @@ const createOrUpdateClient = async (
     }
   } catch (error) {
     console.error('Error creating or updating client:', error);
-    return undefined;
+    return null;
   }
 };
 
@@ -353,7 +353,7 @@ const createOrUpdateClient = async (
  * @param clientId The client ID to update
  * @param orderTotal The total amount of the order
  */
-const updateClientOrderStats = async (clientId: string, orderTotal: number): Promise<void> => {
+const updateClientOrderStats = async (clientId: string | null): Promise<void> => {
   try {
     if (!clientId) return;
     
@@ -365,15 +365,14 @@ const updateClientOrderStats = async (clientId: string, orderTotal: number): Pro
       
       // Calculate new values
       const totalOrders = clientData.totalOrders || 0;
-      const totalSpent = (clientData.totalSpent || 0) + orderTotal;
-      const averageOrderValue = totalOrders > 0 ? totalSpent / totalOrders : orderTotal;
+      const totalSpent = (clientData.totalSpent || 0);
+      const averageOrderValue = totalOrders > 0 ? totalSpent / totalOrders : 0;
       
       // Set last order date to current date
       const lastOrderDate = new Date();
       
       // Update client with order statistics
       await updateDoc(clientRef, {
-        totalSpent,
         averageOrderValue,
         lastOrderDate
       });
@@ -493,7 +492,7 @@ const convertWooCommerceOrder = async (wcOrder: any): Promise<Omit<Order, 'id'>>
   });
   
   // Create or update client in CRM if email is available
-  let clientId: string | undefined = undefined;
+  let clientId: string | null = null; // Initialize as null instead of undefined
   try {
     if (wcOrder.billing?.email) {
       console.log(`Attempting to create/update client for order #${wcOrder.number}`);
@@ -504,12 +503,13 @@ const convertWooCommerceOrder = async (wcOrder: any): Promise<Omit<Order, 'id'>>
         billingAddress
       );
       
-      console.log(`Client process result for order #${wcOrder.number}: clientId=${clientId || 'undefined'}`);
+      console.log(`Client process result for order #${wcOrder.number}: clientId=${clientId || 'null'}`);
     } else {
       console.log(`No email available for order #${wcOrder.number}, skipping client creation`);
     }
   } catch (clientError) {
     console.error(`Error during client creation for order #${wcOrder.number}:`, clientError);
+    clientId = null; // Ensure clientId is null on error
   }
   
   const orderData: Omit<Order, 'id'> = {
@@ -534,16 +534,17 @@ const convertWooCommerceOrder = async (wcOrder: any): Promise<Omit<Order, 'id'>>
     createdAt: new Date(),
     updatedAt: new Date(),
     packingSlipPrinted: false,
-    clientId
+    clientId  // Will be null if no client was created/found
   };
   
   // If clientId exists, update client's order statistics
   if (clientId) {
     try {
       console.log(`Updating order statistics for client ${clientId} with order total ${total}`);
-      await updateClientOrderStats(clientId, total);
+      await updateClientOrderStats(clientId);
     } catch (statsError) {
       console.error(`Error updating client order statistics for client ${clientId}:`, statsError);
+      // Error in updating stats doesn't affect the order creation
     }
   } else {
     console.log(`No clientId available for order #${wcOrder.number}, skipping order statistics update`);
@@ -895,7 +896,7 @@ export const wooSyncScript = async () => {
           const orderRef = doc(db, 'orders', existingOrder.id);
           
           // Update only what has changed
-          await updateDoc(orderRef, {
+          const updatePayload: any = {
             status: newOrderData.status,
             items: newOrderData.items,
             ...(newOrderData.hasUnidentifiedItems ? { unidentifiedItems: newOrderData.unidentifiedItems } : {}),
@@ -904,9 +905,15 @@ export const wooSyncScript = async () => {
             shippingCost: newOrderData.shippingCost,
             tax: newOrderData.tax,
             total: newOrderData.total,
-            ...(newOrderData.clientId ? { clientId: newOrderData.clientId } : {}),
             updatedAt: new Date()
-          });
+          };
+          
+          // Only include clientId if it exists and has changed
+          if (newOrderData.clientId && newOrderData.clientId !== existingOrderData.clientId) {
+            updatePayload.clientId = newOrderData.clientId;
+          }
+          
+          await updateDoc(orderRef, updatePayload);
           
           updatedOrders++;
         }

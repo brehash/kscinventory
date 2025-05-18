@@ -486,10 +486,10 @@ const convertWooCommerceOrder = async (wcOrder: any): Promise<Omit<Order, 'id'>>
   
   // DEBUG: Log billing information details to verify client data
   // console.log(`Billing information for order #${wcOrder.number}:`, {
-    address: billingAddress,
-    hasEmail: !!wcOrder.billing?.email,
-    emailValue: wcOrder.billing?.email || 'Not provided'
-  });
+  //   address: billingAddress,
+  //   hasEmail: !!wcOrder.billing?.email,
+  //   emailValue: wcOrder.billing?.email || 'Not provided'
+  // });
   
   // Create or update client in CRM if email is available
   let clientId: string | null = null; // Initialize as null instead of undefined

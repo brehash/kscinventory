@@ -9,11 +9,14 @@ import {
   Truck, 
   PrinterIcon,
   AlertTriangle,
-  CheckCircle
+  CheckCircle,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useReactToPrint } from 'react-to-print';
 import { useAuth } from '../auth/AuthProvider';
+import { logActivity } from '../../utils/activityLogger';
 
 const PackingSlip: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -25,6 +28,7 @@ const PackingSlip: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [printedStatus, setPrintedStatus] = useState<'printed' | 'not-printed' | 'error' | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   
   useEffect(() => {
     const fetchOrderDetails = async () => {
@@ -45,10 +49,22 @@ const PackingSlip: React.FC = () => {
         
         const orderData = orderDoc.data();
         
+        // Ensure all items have picked property set
+        const items = orderData.items.map((item: any) => ({
+          ...item,
+          picked: item.picked !== undefined ? item.picked : false
+        }));
+        
+        // Update document if we had to add picked property to any items
+        if (JSON.stringify(items) !== JSON.stringify(orderData.items)) {
+          await updateDoc(orderRef, { items });
+        }
+        
         // Convert Firestore timestamps to Date objects
         setOrder({
           id: orderDoc.id,
           ...orderData,
+          items,
           orderDate: orderData.orderDate?.toDate() || new Date(),
           createdAt: orderData.createdAt?.toDate() || new Date(),
           updatedAt: orderData.updatedAt?.toDate() || new Date(),
@@ -95,6 +111,47 @@ const PackingSlip: React.FC = () => {
     }
   });
   
+  // Handle marking all items as picked
+  const handleMarkAllAsPicked = async () => {
+    if (!id || !order || !currentUser) return;
+    
+    try {
+      const updatedItems = order.items.map(item => ({
+        ...item,
+        picked: true
+      }));
+      
+      // Update the order in Firestore
+      const orderRef = doc(db, 'orders', id);
+      await updateDoc(orderRef, {
+        items: updatedItems,
+        updatedAt: new Date()
+      });
+      
+      // Log activity
+      await logActivity(
+        'updated',
+        'order',
+        id,
+        `Order #${order.orderNumber} - Marked all items as picked`,
+        currentUser
+      );
+      
+      // Update local state
+      setOrder({
+        ...order,
+        items: updatedItems,
+        updatedAt: new Date()
+      });
+      
+      setSuccess('All items have been marked as picked!');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      console.error('Error marking items as picked:', err);
+      setError('Failed to update items');
+    }
+  };
+  
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -122,6 +179,10 @@ const PackingSlip: React.FC = () => {
     );
   }
   
+  // Calculate if all items have been picked
+  const allItemsPicked = order.items.every(item => item.picked);
+  const pickedItemsCount = order.items.filter(item => item.picked).length;
+  
   return (
     <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-0">
@@ -141,13 +202,52 @@ const PackingSlip: React.FC = () => {
             </p>
           </div>
         </div>
-        <button
-          onClick={handlePrint}
-          className="inline-flex items-center bg-indigo-600 text-white px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm rounded-md hover:bg-indigo-700 transition-colors"
-        >
-          <PrinterIcon className="h-4 w-4 mr-1 sm:mr-2" />
-          Print Packing Slip
-        </button>
+        <div className="flex gap-2 sm:gap-3">
+          {!allItemsPicked && (
+            <button
+              onClick={handleMarkAllAsPicked}
+              className="inline-flex items-center px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700"
+            >
+              <CheckSquare className="h-4 w-4 mr-1.5" />
+              Mark All as Picked
+            </button>
+          )}
+          <button
+            onClick={handlePrint}
+            className="inline-flex items-center bg-indigo-600 text-white px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm rounded-md hover:bg-indigo-700 transition-colors"
+          >
+            <PrinterIcon className="h-4 w-4 mr-1 sm:mr-2" />
+            Print Packing Slip
+          </button>
+        </div>
+      </div>
+      
+      {/* Picking status indicator */}
+      <div className="bg-white p-4 rounded-lg shadow-sm">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="text-sm font-medium text-gray-700">
+            Picking Status ({pickedItemsCount} of {order.items.length} items picked)
+          </h3>
+        </div>
+        
+        <div className="w-full bg-gray-200 rounded-full h-2.5">
+          <div 
+            className="bg-green-500 h-2.5 rounded-full" 
+            style={{ width: `${(pickedItemsCount / order.items.length) * 100}%` }}
+          ></div>
+        </div>
+        
+        {allItemsPicked ? (
+          <p className="mt-2 text-xs text-green-600 flex items-center">
+            <CheckSquare className="h-3.5 w-3.5 mr-1" />
+            All items for this order have been picked
+          </p>
+        ) : (
+          <p className="mt-2 text-xs text-amber-600 flex items-center">
+            <AlertTriangle className="h-3.5 w-3.5 mr-1" />
+            {order.items.length - pickedItemsCount} items still need to be picked
+          </p>
+        )}
       </div>
       
       {printedStatus && (
@@ -163,6 +263,15 @@ const PackingSlip: React.FC = () => {
                 ? 'Packing slip has been printed and marked as printed in the system.' 
                 : 'There was an error marking the packing slip as printed. Please try again.'}
             </p>
+          </div>
+        </div>
+      )}
+      
+      {success && (
+        <div className="bg-green-50 border-l-4 border-green-500 p-4">
+          <div className="flex items-center">
+            <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
+            <p className="text-sm text-green-700">{success}</p>
           </div>
         </div>
       )}
@@ -255,7 +364,7 @@ const PackingSlip: React.FC = () => {
                   Quantity
                 </th>
                 <th scope="col" className="px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase print:hidden">
-                  Price
+                  Status
                 </th>
               </tr>
             </thead>
@@ -271,8 +380,20 @@ const PackingSlip: React.FC = () => {
                   <td className="px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-500 text-center">
                     {item.quantity}
                   </td>
-                  <td className="px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-500 text-center print:hidden">
-                    {item.price.toFixed(2)} RON
+                  <td className="px-3 sm:px-4 py-2 text-xs sm:text-sm text-center print:hidden">
+                    <div className="flex items-center justify-center">
+                      {item.picked ? (
+                        <span className="inline-flex items-center text-green-700">
+                          <CheckSquare className="h-4 w-4 mr-1" />
+                          Picked
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center text-gray-500">
+                          <Square className="h-4 w-4 mr-1" />
+                          Not Picked
+                        </span>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

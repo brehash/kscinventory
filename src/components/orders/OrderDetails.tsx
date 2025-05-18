@@ -5,7 +5,8 @@ import { db } from '../../config/firebase';
 import { 
   Order, 
   OrderStatus,
-  UnidentifiedItem
+  UnidentifiedItem,
+  OrderItem
 } from '../../types';
 import { 
   ArrowLeft, 
@@ -13,7 +14,9 @@ import {
   Edit,
   RefreshCw,
   CheckCircle,
-  AlertTriangle
+  AlertTriangle,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useAuth } from '../auth/AuthProvider';
@@ -36,6 +39,7 @@ const OrderDetails: React.FC = () => {
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   
   // Edit status modal state
   const [showStatusModal, setShowStatusModal] = useState(false);
@@ -65,10 +69,22 @@ const OrderDetails: React.FC = () => {
         
         const orderData = orderDoc.data();
         
+        // Initialize picked status for any items that don't have it set
+        const updatedItems = orderData.items.map((item: OrderItem) => ({
+          ...item,
+          picked: item.picked !== undefined ? item.picked : false
+        }));
+        
+        // Update database if any items needed to be initialized
+        if (JSON.stringify(updatedItems) !== JSON.stringify(orderData.items)) {
+          await updateDoc(orderRef, { items: updatedItems });
+        }
+        
         // Convert Firestore timestamps to Date objects
         setOrder({
           id: orderDoc.id,
           ...orderData,
+          items: updatedItems, // Use the updated items with picked status
           orderDate: orderData.orderDate?.toDate() || new Date(),
           createdAt: orderData.createdAt?.toDate() || new Date(),
           updatedAt: orderData.updatedAt?.toDate() || new Date(),
@@ -130,9 +146,14 @@ const OrderDetails: React.FC = () => {
       
       setShowStatusModal(false);
       setUpdatingStatus(false);
+      
+      // Show success message
+      setSuccess('Order status updated successfully');
+      setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       console.error('Error updating order status:', err);
       setUpdatingStatus(false);
+      setError('Failed to update order status');
     }
   };
 
@@ -166,6 +187,100 @@ const OrderDetails: React.FC = () => {
     setSelectedUnidentifiedItem(null);
   };
   
+  // Handle toggling picked status for an order item
+  const handleToggleItemPicked = async (itemId: string) => {
+    if (!id || !order || !currentUser) return;
+    
+    try {
+      // Update the item's picked status
+      const updatedItems = order.items.map(item => {
+        if (item.id === itemId) {
+          return { ...item, picked: !item.picked };
+        }
+        return item;
+      });
+      
+      // Update order in Firestore
+      const orderRef = doc(db, 'orders', id);
+      await updateDoc(orderRef, {
+        items: updatedItems,
+        updatedAt: new Date()
+      });
+      
+      // Log the activity
+      const pickedItem = updatedItems.find(i => i.id === itemId);
+      await logActivity(
+        'updated',
+        'order',
+        id,
+        `Order #${order.orderNumber} - ${pickedItem?.picked ? 'Picked' : 'Unpicked'} item: ${pickedItem?.productName}`,
+        currentUser
+      );
+      
+      // Update the local state
+      setOrder({
+        ...order,
+        items: updatedItems,
+        updatedAt: new Date()
+      });
+      
+      // Show success message
+      const item = order.items.find(i => i.id === itemId);
+      setSuccess(`Item "${item?.productName}" ${pickedItem?.picked ? 'marked as picked' : 'unmarked'}`);
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      console.error('Error toggling item picked status:', err);
+      setError('Failed to update item status');
+    }
+  };
+  
+  // Handle marking all items as picked
+  const handleMarkAllAsPicked = async () => {
+    if (!id || !order || !currentUser) return;
+    
+    try {
+      // Update all items to picked
+      const updatedItems = order.items.map(item => ({
+        ...item,
+        picked: true
+      }));
+      
+      // Update order in Firestore
+      const orderRef = doc(db, 'orders', id);
+      await updateDoc(orderRef, {
+        items: updatedItems,
+        updatedAt: new Date()
+      });
+      
+      // Log the activity
+      await logActivity(
+        'updated',
+        'order',
+        id,
+        `Order #${order.orderNumber} - Marked all items as picked`,
+        currentUser
+      );
+      
+      // Update the local state
+      setOrder({
+        ...order,
+        items: updatedItems,
+        updatedAt: new Date()
+      });
+      
+      // Show success message
+      setSuccess('All items marked as picked');
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      console.error('Error marking all items as picked:', err);
+      setError('Failed to update items');
+    }
+  };
+  
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -192,6 +307,11 @@ const OrderDetails: React.FC = () => {
       </div>
     );
   }
+  
+  // Calculate how many items are picked
+  const pickedItemsCount = order.items.filter(item => item.picked).length;
+  const totalItemsCount = order.items.length;
+  const allItemsPicked = pickedItemsCount === totalItemsCount;
   
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -247,6 +367,16 @@ const OrderDetails: React.FC = () => {
           </button>
         </div>
       </div>
+      
+      {/* Success message */}
+      {success && (
+        <div className="bg-green-50 border-l-4 border-green-500 p-4">
+          <div className="flex items-center">
+            <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
+            <p className="text-sm text-green-700">{success}</p>
+          </div>
+        </div>
+      )}
 
       {/* Warning for unidentified items */}
       {order.hasUnidentifiedItems && order.unidentifiedItems && order.unidentifiedItems.length > 0 && (
@@ -269,6 +399,43 @@ const OrderDetails: React.FC = () => {
           </div>
         </div>
       )}
+      
+      {/* Items picking status */}
+      <div className="bg-white p-4 rounded-lg shadow-sm">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="text-sm font-medium text-gray-700">
+            Picking Status ({pickedItemsCount} of {totalItemsCount} items picked)
+          </h3>
+          {!allItemsPicked && (
+            <button
+              onClick={handleMarkAllAsPicked}
+              className="inline-flex items-center px-2 py-1 bg-green-100 text-green-800 rounded-md text-xs hover:bg-green-200"
+            >
+              <CheckSquare className="h-3 w-3 mr-1" />
+              Mark All as Picked
+            </button>
+          )}
+        </div>
+        
+        <div className="w-full bg-gray-200 rounded-full h-2.5">
+          <div 
+            className="bg-green-500 h-2.5 rounded-full" 
+            style={{ width: `${totalItemsCount > 0 ? (pickedItemsCount / totalItemsCount * 100) : 0}%` }}
+          ></div>
+        </div>
+        
+        {allItemsPicked ? (
+          <p className="mt-2 text-xs text-green-600 flex items-center">
+            <CheckSquare className="h-3.5 w-3.5 mr-1" />
+            All items for this order have been picked
+          </p>
+        ) : (
+          <p className="mt-2 text-xs text-amber-600 flex items-center">
+            <AlertTriangle className="h-3.5 w-3.5 mr-1" />
+            {totalItemsCount - pickedItemsCount} items still need to be picked
+          </p>
+        )}
+      </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Order Summary */}
@@ -313,6 +480,15 @@ const OrderDetails: React.FC = () => {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Order Items with picking functionality */}
+      <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm">
+        <OrderItemsTable 
+          items={order.items} 
+          onTogglePicked={handleToggleItemPicked}
+          showPickStatus={true}
+        />
       </div>
 
       {/* Unidentified Items Section */}

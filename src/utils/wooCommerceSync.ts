@@ -504,7 +504,7 @@ const convertWooCommerceOrder = async (wcOrder: any): Promise<Omit<Order, 'id'>>
     tax,
     total,
     paymentMethod: wcOrder.payment_method || 'other',
-    notes: wcOrder.customer_note || undefined,
+    notes: wcOrder.customer_note || null,
     source: 'woocommerce',
     woocommerceId: wcOrder.id,
     createdAt: new Date(),

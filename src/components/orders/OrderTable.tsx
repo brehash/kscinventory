@@ -12,6 +12,7 @@ interface OrderTableProps {
   handleSort: (field: keyof Order) => void;
   handleOpenEditModal: (order: Order) => void;
   confirmDelete: (order: Order) => void;
+  handleSelectAllOrders: (checked: boolean) => void;
 }
 
 const OrderTable: React.FC<OrderTableProps> = ({
@@ -22,7 +23,8 @@ const OrderTable: React.FC<OrderTableProps> = ({
   sortDirection,
   handleSort,
   handleOpenEditModal,
-  confirmDelete
+  confirmDelete,
+  handleSelectAllOrders
 }) => {
   return (
     <div className="overflow-x-auto bg-white rounded-lg shadow-sm">
@@ -33,11 +35,7 @@ const OrderTable: React.FC<OrderTableProps> = ({
               <input
                 type="checkbox"
                 className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                onChange={(e) => {
-                  orders.forEach(order => {
-                    handleCheckboxChange(order.id, e.target.checked);
-                  });
-                }}
+                onChange={(e) => handleSelectAllOrders(e.target.checked)}
                 checked={orders.length > 0 && selectedOrderIds.size === orders.length}
               />
             </th>

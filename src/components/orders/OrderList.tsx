@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, query, orderBy, where, deleteDoc, doc, updateDoc, Timestamp, startAfter, limit, getCountFromServer } from 'firebase/firestore';
+import { useNavigate } from 'react-router-dom';
+import { collection, getDocs, query, orderBy, where, deleteDoc, doc, updateDoc, Timestamp, limit, startAfter, getCountFromServer } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { Order, OrderStatus } from '../../types';
-import { AlertTriangle, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { AlertTriangle, Loader2, ChevronLeft, ChevronRight, Trash } from 'lucide-react';
 import Modal from '../ui/Modal';
 import OrderStatusUpdateModal from './OrderStatusUpdateModal';
 import { useAuth } from '../auth/AuthProvider';
 import { logActivity } from '../../utils/activityLogger';
 import ReactPaginate from 'react-paginate';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import OrderSyncModal from './OrderSyncModal';
 import OrderDeleteConfirmation from './OrderDeleteConfirmation';
 import OrderActionButtons from './OrderActionButtons';
@@ -51,6 +52,7 @@ const OrderList: React.FC = () => {
   // State for modals
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [orderToUpdate, setOrderToUpdate] = useState<Order | null>(null);
   const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
@@ -255,6 +257,64 @@ const OrderList: React.FC = () => {
     setShowDeleteModal(true);
   };
   
+  // Handler for selecting all orders
+  const handleSelectAllOrders = (checked: boolean) => {
+    if (checked) {
+      // Create a new set with all current order IDs
+      const allOrderIds = new Set<string>();
+      orders.forEach(order => allOrderIds.add(order.id));
+      setSelectedOrderIds(allOrderIds);
+    } else {
+      // Clear all selections
+      setSelectedOrderIds(new Set());
+    }
+  };
+  
+  // Handler for bulk deleting orders
+  const handleBulkDelete = async () => {
+    if (selectedOrderIds.size === 0 || !currentUser) return;
+    
+    try {
+      setLoading(true);
+      
+      // Delete each selected order
+      for (const orderId of selectedOrderIds) {
+        await deleteDoc(doc(db, 'orders', orderId));
+        
+        // Get order details for activity log
+        const orderToLog = orders.find(order => order.id === orderId);
+        
+        // Log the activity
+        if (orderToLog) {
+          await logActivity(
+            'deleted',
+            'order',
+            orderId,
+            `Order #${orderToLog.orderNumber}`,
+            currentUser
+          );
+        }
+      }
+      
+      // Update total count
+      setTotalOrders(prev => prev - selectedOrderIds.size);
+      setPageCount(Math.ceil((totalOrders - selectedOrderIds.size) / itemsPerPage));
+      
+      // Clear selections
+      setSelectedOrderIds(new Set());
+      setShowBulkDeleteModal(false);
+      
+      // Refetch orders to update the UI
+      fetchOrders(currentPage);
+      
+    } catch (error) {
+      console.error('Error deleting orders:', error);
+      setError('Failed to delete orders');
+      setShowBulkDeleteModal(false);
+      setLoading(false);
+    }
+  };
+  
   // Handler for deleting an order
   const handleDelete = async () => {
     if (!orderToDelete || !currentUser) return;
@@ -324,7 +384,7 @@ const OrderList: React.FC = () => {
         currentUser
       );
       
-      // Update the order in the local state
+      // Update the local state
       setOrders(orders.map(order => {
         if (order.id === orderToUpdate.id) {
           return {
@@ -383,7 +443,18 @@ const OrderList: React.FC = () => {
         </div>
         
         {/* Action Buttons */}
-        <OrderActionButtons openSyncModal={() => setShowSyncModal(true)} />
+        <div className="flex flex-wrap gap-2">
+          {selectedOrderIds.size > 0 && (
+            <button
+              onClick={() => setShowBulkDeleteModal(true)}
+              className="inline-flex items-center px-3 py-1.5 sm:px-4 sm:py-2 border border-transparent shadow-sm text-xs sm:text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+            >
+              <Trash className="h-4 w-4 mr-1.5" />
+              Delete Selected ({selectedOrderIds.size})
+            </button>
+          )}
+          <OrderActionButtons openSyncModal={() => setShowSyncModal(true)} />
+        </div>
       </div>
       
       {/* Error Message */}
@@ -432,6 +503,7 @@ const OrderList: React.FC = () => {
             handleSort={handleSort}
             handleOpenEditModal={handleOpenEditModal}
             confirmDelete={confirmDelete}
+            handleSelectAllOrders={handleSelectAllOrders}
           />
           
           {/* Pagination */}
@@ -457,8 +529,10 @@ const OrderList: React.FC = () => {
                 <div>
                   <p className="text-sm text-gray-700">
                     Showing <span className="font-medium">{totalOrders > 0 ? currentPage * itemsPerPage + 1 : 0}</span> to{' '}
-                    <span className="font-medium">{Math.min((currentPage + 1) * itemsPerPage, totalOrders)}</span> of{' '}
-                    <span className="font-medium">{totalOrders}</span> orders
+                    <span className="font-medium">
+                      {Math.min((currentPage + 1) * itemsPerPage, totalOrders)}
+                    </span>{' '}
+                    of <span className="font-medium">{totalOrders}</span> orders
                   </p>
                 </div>
                 <div>
@@ -497,7 +571,7 @@ const OrderList: React.FC = () => {
         orderNumber={orderToUpdate?.orderNumber || ''}
       />
       
-      {/* Delete Confirmation Modal */}
+      {/* Delete Confirmation Modal for Single Order */}
       <Modal
         isOpen={showDeleteModal}
         onClose={() => setShowDeleteModal(false)}
@@ -526,8 +600,45 @@ const OrderList: React.FC = () => {
           </button>
           <button
             type="button"
-            className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:w-auto sm:text-sm"
+            className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
             onClick={() => setShowDeleteModal(false)}
+          >
+            Cancel
+          </button>
+        </div>
+      </Modal>
+
+      {/* Delete Confirmation Modal for Bulk Deletion */}
+      <Modal
+        isOpen={showBulkDeleteModal}
+        onClose={() => setShowBulkDeleteModal(false)}
+        title="Delete Multiple Orders"
+      >
+        <div className="sm:flex sm:items-start">
+          <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+            <AlertTriangle className="h-6 w-6 text-red-600" aria-hidden="true" />
+          </div>
+          <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+            <h3 className="text-lg leading-6 font-medium text-gray-900">Delete Multiple Orders</h3>
+            <div className="mt-2">
+              <p className="text-sm text-gray-500">
+                Are you sure you want to delete {selectedOrderIds.size} selected orders? This action cannot be undone.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
+          <button
+            type="button"
+            className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm"
+            onClick={handleBulkDelete}
+          >
+            Delete {selectedOrderIds.size} Orders
+          </button>
+          <button
+            type="button"
+            className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+            onClick={() => setShowBulkDeleteModal(false)}
           >
             Cancel
           </button>

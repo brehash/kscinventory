@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { collection, query, getDocs, orderBy, where, limit, startAfter, getCountFromServer } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { Client, ClientFilterOptions } from '../../types';
-import { Plus, Search, Filter, ChevronLeft, ChevronRight, Loader2, UserPlus, SlidersHorizontal, RefreshCw, Check, UserMinus, Users, Building } from 'lucide-react';
+import { Plus, Search, Filter, ChevronLeft, ChevronRight, Loader2, UserPlus, SlidersHorizontal, RefreshCw, Check, UserMinus, Users, Building, User, ShoppingBag, DollarSign } from 'lucide-react';
 import ClientCard from './ClientCard';
 import ReactPaginate from 'react-paginate';
 

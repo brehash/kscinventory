@@ -234,29 +234,6 @@ const OrderList: React.FC = () => {
     }
   };
   
-  // Handler for sorting
-  const handleSort = (field: keyof Order) => {
-    if (field === sortField) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDirection('asc');
-    }
-  };
-  
-  // Handler for opening the edit status modal
-  const handleOpenEditModal = (order: Order) => {
-    setOrderToUpdate(order);
-    setNewStatus(order.status);
-    setShowStatusModal(true);
-  };
-  
-  // Handler for opening the delete confirmation modal
-  const confirmDelete = (order: Order) => {
-    setOrderToDelete(order);
-    setShowDeleteModal(true);
-  };
-  
   // Handler for selecting all orders
   const handleSelectAllOrders = (checked: boolean) => {
     if (checked) {
@@ -313,6 +290,29 @@ const OrderList: React.FC = () => {
       setShowBulkDeleteModal(false);
       setLoading(false);
     }
+  };
+  
+  // Handler for sorting
+  const handleSort = (field: keyof Order) => {
+    if (field === sortField) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+  
+  // Handler for opening the edit status modal
+  const handleOpenEditModal = (order: Order) => {
+    setOrderToUpdate(order);
+    setNewStatus(order.status);
+    setShowStatusModal(true);
+  };
+  
+  // Handler for opening the delete confirmation modal
+  const confirmDelete = (order: Order) => {
+    setOrderToDelete(order);
+    setShowDeleteModal(true);
   };
   
   // Handler for deleting an order

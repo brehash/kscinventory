@@ -920,8 +920,9 @@ export const wooSyncScript = async () => {
       }
     }
     
-    console.log(`Sync completed: ${newOrders} new orders, ${updatedOrders} updated orders`);
+    console.log(`WooCommerce sync completed: ${newOrders} new orders, ${updatedOrders} updated orders`);
     console.log(`Client sync: ${newClients} new clients, ${updatedClients} updated clients`);
+    
   } catch (error) {
     console.error('Error in WooCommerce sync script:', error);
   }

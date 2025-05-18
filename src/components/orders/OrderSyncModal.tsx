@@ -178,11 +178,11 @@ const OrderSyncModal: React.FC<OrderSyncModalProps> = ({ isOpen, onClose, onSync
                     <ListPlus className="h-3.5 w-3.5 mr-1" />
                     New orders: {syncResult.newOrders}
                   </p>
-                  <p className="flex items-center">
+                  <p className="flex items-center" >
                     <RefreshCw className="h-3.5 w-3.5 mr-1" />
                     Updated orders: {syncResult.updatedOrders}
                   </p>
-                  
+
                   {syncResult.ordersWithUnidentifiedItems > 0 && (
                     <p className="flex items-center text-amber-600">
                       <AlertTriangle className="h-3.5 w-3.5 mr-1" />

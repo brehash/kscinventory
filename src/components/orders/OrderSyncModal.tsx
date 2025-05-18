@@ -21,6 +21,7 @@ const OrderSyncModal: React.FC<OrderSyncModalProps> = ({ isOpen, onClose, onSync
     totalFound: number;
     processed: number;
     stage: 'finding' | 'processing' | 'complete' | 'idle';
+    currentOrderNumber?: string;
   }>({
     totalFound: 0,
     processed: 0,
@@ -87,13 +88,13 @@ const OrderSyncModal: React.FC<OrderSyncModalProps> = ({ isOpen, onClose, onSync
   
   // Get progress message based on current sync progress
   const getProgressMessage = () => {
-    const { totalFound, processed, stage } = syncProgress;
+    const { totalFound, processed, stage, currentOrderNumber } = syncProgress;
     
     switch (stage) {
       case 'finding':
         return 'Finding orders from WooCommerce...';
       case 'processing':
-        return `Found ${totalFound} orders. Syncing ${processed} of ${totalFound}...`;
+        return `Found ${totalFound} orders. Syncing ${processed} of ${totalFound}${currentOrderNumber ? ` (Order #${currentOrderNumber})` : ''}...`;
       case 'complete':
         return `Synced ${processed} of ${totalFound} orders successfully.`;
       default:

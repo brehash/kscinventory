@@ -320,9 +320,24 @@ const Dashboard: React.FC = () => {
             productName: product.name,
             currentQuantity: product.quantity,
             minQuantity: product.minQuantity,
-            locationName: locationName
+            locationName: locationName,
+            locationId: product.locationId,
+            categoryId: product.categoryId
           });
         }
+        
+        // Sort alerts by criticality (out of stock first, then by stock level percentage)
+        alerts.sort((a, b) => {
+          // If one is out of stock and the other isn't, the out of stock one comes first
+          if (a.currentQuantity === 0 && b.currentQuantity !== 0) return -1;
+          if (a.currentQuantity !== 0 && b.currentQuantity === 0) return 1;
+          
+          // Otherwise, sort by the ratio of current to minimum quantity (ascending)
+          const ratioA = a.currentQuantity / a.minQuantity;
+          const ratioB = b.currentQuantity / b.minQuantity;
+          return ratioA - ratioB;
+        });
+        
         setLowStockAlerts(alerts);
         
         // Fetch order data for statistics

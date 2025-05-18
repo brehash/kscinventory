@@ -1,6 +1,6 @@
 import React from 'react';
 import { LowStockAlert } from '../../types';
-import { AlertCircle, ChevronRight } from 'lucide-react';
+import { AlertCircle, ChevronRight, ExternalLink } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 interface LowStockAlertsProps {
@@ -8,6 +8,9 @@ interface LowStockAlertsProps {
 }
 
 const LowStockAlerts: React.FC<LowStockAlertsProps> = ({ alerts }) => {
+  // Show only the top 5 alerts on the dashboard
+  const displayAlerts = alerts.slice(0, 5);
+  
   if (alerts.length === 0) {
     return (
       <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm">
@@ -34,7 +37,7 @@ const LowStockAlerts: React.FC<LowStockAlertsProps> = ({ alerts }) => {
       </div>
       
       <div className="divide-y divide-gray-200">
-        {alerts.map(alert => (
+        {displayAlerts.map(alert => (
           <div key={alert.id} className="py-3 flex items-center justify-between">
             <div className="flex items-start">
               <div className="p-1.5 bg-amber-100 rounded-full mr-3">
@@ -58,6 +61,17 @@ const LowStockAlerts: React.FC<LowStockAlertsProps> = ({ alerts }) => {
           </div>
         ))}
       </div>
+      
+      {alerts.length > 5 && (
+        <div className="mt-4 pt-3 border-t border-gray-200 text-center">
+          <Link 
+            to="/alerts"
+            className="inline-flex items-center text-xs sm:text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+          >
+            View all {alerts.length} alerts <ExternalLink className="ml-1 h-3 w-3 sm:h-4 sm:w-4" />
+          </Link>
+        </div>
+      )}
     </div>
   );
 };

@@ -96,6 +96,8 @@ export interface LowStockAlert {
   currentQuantity: number;
   minQuantity: number;
   locationName: string;
+  locationId?: string; // Added for filtering
+  categoryId?: string; // Added for filtering
 }
 
 // Order Statistics Types

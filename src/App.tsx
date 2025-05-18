@@ -22,6 +22,7 @@ import CategorySettings from './components/settings/CategorySettings';
 import ProductTypeSettings from './components/settings/ProductTypeSettings';
 import ProviderSettings from './components/settings/ProviderSettings';
 import WooCommerceSettings from './components/settings/WooCommerceSettings';
+import LowStockAlertList from './components/alerts/LowStockAlertList';
 
 // User Management Components
 import UserList from './components/users/UserList';
@@ -86,6 +87,9 @@ function App() {
             <Route path="orders/:id" element={<OrderDetails />} />
             <Route path="orders/:id/packingslip" element={<PackingSlip />} />
             <Route path="orders/packingslip" element={<GlobalPackingSlip />} />
+            
+            {/* Low Stock Alerts Route */}
+            <Route path="alerts" element={<LowStockAlertList />} />
             
             {/* User Management Routes - Admin Only */}
             <Route 

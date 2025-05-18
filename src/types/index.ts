@@ -4,6 +4,11 @@ export interface User {
   email: string | null;
   displayName: string | null;
   role: 'admin' | 'manager' | 'staff';
+  createdAt?: Date;
+  updatedAt?: Date;
+  lastLogin?: Date;
+  createdBy?: string;
+  updatedBy?: string;
 }
 
 // Product Types
@@ -118,7 +123,7 @@ export interface OrdersByMonthData {
 
 // Activity Log Types
 export type ActivityType = 'added' | 'removed' | 'updated' | 'deleted';
-export type ActivityEntityType = 'product' | 'category' | 'location' | 'productType' | 'provider' | 'order';
+export type ActivityEntityType = 'product' | 'category' | 'location' | 'productType' | 'provider' | 'order' | 'user';
 
 export interface ActivityLog {
   id: string;
@@ -137,8 +142,9 @@ export interface AuthContextType {
   currentUser: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, displayName: string) => Promise<void>;
+  register: (email: string, password: string, displayName: string, role?: string) => Promise<void>;
   logout: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
 }
 
 // Order Types

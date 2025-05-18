@@ -30,6 +30,7 @@ export const logActivity = async (
       date: new Date(),
       userId: user.uid,
       userName: user.displayName || user.email || 'Unknown User',
+      userRole: user.role, // Added user role to activity logs
     };
     
     // Only add quantity field if it's provided (not undefined or null)

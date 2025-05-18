@@ -5,7 +5,8 @@ import {
   signOut,
   onAuthStateChanged,
   updateProfile,
-  User as FirebaseUser
+  User as FirebaseUser,
+  sendPasswordResetEmail
 } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../../config/firebase';
@@ -41,15 +42,33 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             uid: firebaseUser.uid,
             email: firebaseUser.email,
             displayName: firebaseUser.displayName,
-            role: userDoc.data().role || 'staff'
+            role: userDoc.data().role || 'staff',
+            createdAt: userDoc.data().createdAt?.toDate(),
+            lastLogin: new Date()
           });
+          
+          // Update last login timestamp
+          await setDoc(userDocRef, {
+            lastLogin: new Date()
+          }, { merge: true });
+          
         } else {
           // Default user data if not in Firestore yet
           setCurrentUser({
             uid: firebaseUser.uid,
             email: firebaseUser.email,
             displayName: firebaseUser.displayName,
-            role: 'staff'
+            role: 'staff',
+            lastLogin: new Date()
+          });
+          
+          // Create the user document if it doesn't exist
+          await setDoc(userDocRef, {
+            email: firebaseUser.email,
+            displayName: firebaseUser.displayName,
+            role: 'staff',
+            createdAt: new Date(),
+            lastLogin: new Date()
           });
         }
       } else {
@@ -61,7 +80,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return () => unsubscribe();
   }, []);
 
-  const register = async (email: string, password: string, displayName: string) => {
+  const register = async (email: string, password: string, displayName: string, role: string = 'staff') => {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const firebaseUser = userCredential.user;
@@ -75,8 +94,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       await setDoc(doc(db, 'users', firebaseUser.uid), {
         email: email,
         displayName: displayName,
-        role: 'staff',
-        createdAt: new Date()
+        role: role,
+        createdAt: new Date(),
+        lastLogin: new Date()
       });
     } catch (error) {
       console.error('Error registering user:', error);
@@ -101,13 +121,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       throw error;
     }
   };
+  
+  const resetPassword = async (email: string) => {
+    try {
+      await sendPasswordResetEmail(auth, email);
+    } catch (error) {
+      console.error('Error sending password reset email:', error);
+      throw error;
+    }
+  };
 
   const value: AuthContextType = {
     currentUser,
     loading,
     login,
     register,
-    logout
+    logout,
+    resetPassword
   };
 
   return (

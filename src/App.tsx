@@ -4,6 +4,7 @@ import { AuthProvider } from './components/auth/AuthProvider';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
+import ForgotPassword from './components/auth/ForgotPassword';
 import Layout from './components/layout/Layout';
 import Dashboard from './components/dashboard/Dashboard';
 import ProductList from './components/inventory/ProductList';
@@ -21,6 +22,12 @@ import CategorySettings from './components/settings/CategorySettings';
 import ProductTypeSettings from './components/settings/ProductTypeSettings';
 import ProviderSettings from './components/settings/ProviderSettings';
 import WooCommerceSettings from './components/settings/WooCommerceSettings';
+
+// User Management Components
+import UserList from './components/users/UserList';
+import UserCreate from './components/users/UserCreate';
+import UserEdit from './components/users/UserEdit';
+import UserProfile from './components/users/UserProfile';
 
 function App() {
   return (
@@ -41,6 +48,14 @@ function App() {
             element={
               <ProtectedRoute requireAuth={false}>
                 <Register />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/forgot-password" 
+            element={
+              <ProtectedRoute requireAuth={false}>
+                <ForgotPassword />
               </ProtectedRoute>
             } 
           />
@@ -72,8 +87,44 @@ function App() {
             <Route path="orders/:id/packingslip" element={<PackingSlip />} />
             <Route path="orders/packingslip" element={<GlobalPackingSlip />} />
             
-            {/* Settings Routes with Tabs */}
-            <Route path="settings" element={<SettingsTabs />}>
+            {/* User Management Routes - Admin Only */}
+            <Route 
+              path="users" 
+              element={
+                <ProtectedRoute requiredRoles={['admin']}>
+                  <UserList />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="users/new" 
+              element={
+                <ProtectedRoute requiredRoles={['admin']}>
+                  <UserCreate />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="users/:id" 
+              element={
+                <ProtectedRoute requiredRoles={['admin']}>
+                  <UserEdit />
+                </ProtectedRoute>
+              } 
+            />
+            
+            {/* User Profile - Available to all logged in users */}
+            <Route path="profile" element={<UserProfile />} />
+            
+            {/* Settings Routes with Tabs - Manager & Admin Only */}
+            <Route 
+              path="settings" 
+              element={
+                <ProtectedRoute requiredRoles={['admin', 'manager']}>
+                  <SettingsTabs />
+                </ProtectedRoute>
+              }
+            >
               <Route index element={<Navigate to="/settings/locations" replace />} />
               <Route path="locations" element={<LocationSettings />} />
               <Route path="categories" element={<CategorySettings />} />

@@ -12,7 +12,8 @@ import {
   Menu,
   X,
   ShoppingBag,
-  Activity
+  Activity,
+  UserCircle
 } from 'lucide-react';
 
 const Sidebar: React.FC = () => {
@@ -70,18 +71,20 @@ const Sidebar: React.FC = () => {
       name: 'Settings', 
       icon: <Settings className="h-5 w-5" />,
       roles: ['admin', 'manager']
-    }
-  ];
-
-  // Only admins can see the users management page
-  if (currentUser?.role === 'admin') {
-    navItems.push({
+    },
+    {
       path: '/users',
       name: 'Users',
       icon: <Users className="h-5 w-5" />,
       roles: ['admin']
-    });
-  }
+    },
+    {
+      path: '/profile',
+      name: 'Your Profile',
+      icon: <UserCircle className="h-5 w-5" />,
+      roles: ['admin', 'manager', 'staff']
+    }
+  ];
 
   const toggleMobileSidebar = () => {
     setMobileOpen(!mobileOpen);

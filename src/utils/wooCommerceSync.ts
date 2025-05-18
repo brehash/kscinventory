@@ -105,6 +105,8 @@ const mapOrderStatus = (wcStatus: string): OrderStatus => {
       return 'refunded';
     case 'failed':
       return 'failed';
+    case 'draft':
+      return 'draft';
       
     // Custom statuses with wc- prefix  
     case 'wc-preluata':

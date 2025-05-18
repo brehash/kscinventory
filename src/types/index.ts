@@ -100,32 +100,9 @@ export interface LowStockAlert {
   categoryId?: string; // Added for filtering
 }
 
-// Order Statistics Types
-export interface OrderStats {
-  totalOrders: number;
-  totalRevenue: number;
-  pendingOrders: number;
-  processingOrders: number;
-  completedOrders: number;
-  cancelledOrders: number;
-  averageOrderValue: number;
-}
-
-export interface OrdersByStatusData {
-  name: string; // Status name
-  value: number; // Number of orders
-  color: string; // Color for charts
-}
-
-export interface OrdersByMonthData {
-  name: string; // Month
-  count: number; // Number of orders
-  revenue: number; // Total revenue
-}
-
 // Activity Log Types
 export type ActivityType = 'added' | 'removed' | 'updated' | 'deleted';
-export type ActivityEntityType = 'product' | 'category' | 'location' | 'productType' | 'provider' | 'order' | 'user';
+export type ActivityEntityType = 'product' | 'category' | 'location' | 'productType' | 'provider' | 'order' | 'user' | 'client' | 'note';
 
 export interface ActivityLog {
   id: string;
@@ -209,6 +186,7 @@ export interface Order {
   fulfilledAt?: Date;
   fulfilledBy?: string;
   hasUnidentifiedItems?: boolean; // Flag to quickly check if order has unidentified items
+  clientId?: string; // Reference to the client
 }
 
 export type OrderStatus = 
@@ -235,4 +213,64 @@ export interface OrderFilterOptions {
   };
   source?: 'manual' | 'woocommerce' | 'all';
   search?: string;
+}
+
+// CRM Types
+export interface Client {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: Address;
+  companyName?: string;
+  taxId?: string;
+  notes?: ClientNote[];
+  contactPerson?: string;
+  contactRole?: string;
+  website?: string;
+  source?: 'manual' | 'woocommerce';
+  tags?: string[];
+  isActive: boolean;
+  totalOrders: number;
+  totalSpent: number;
+  averageOrderValue: number;
+  lastOrderDate?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy: string;
+  updatedBy?: string;
+}
+
+export interface ClientNote {
+  id: string;
+  clientId: string;
+  content: string;
+  createdAt: Date;
+  createdBy: string;
+  createdByName: string;
+  isPinned?: boolean;
+  isPrivate?: boolean;
+}
+
+export interface ClientSummary {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  totalOrders: number;
+  totalSpent: number;
+  isActive: boolean;
+  lastOrderDate?: Date;
+}
+
+export interface ClientFilterOptions {
+  search?: string;
+  isActive?: boolean;
+  tags?: string[];
+  minTotalOrders?: number;
+  minTotalSpent?: number;
+  dateRange?: {
+    start: Date;
+    end: Date;
+  };
 }

@@ -14,7 +14,8 @@ import {
   ShoppingBag,
   Activity,
   UserCircle,
-  AlertTriangle
+  AlertTriangle,
+  Building
 } from 'lucide-react';
 
 const Sidebar: React.FC = () => {
@@ -71,6 +72,12 @@ const Sidebar: React.FC = () => {
       path: '/alerts',
       name: 'Low Stock',
       icon: <AlertTriangle className="h-5 w-5" />,
+      roles: ['admin', 'manager', 'staff']
+    },
+    {
+      path: '/crm',
+      name: 'CRM',
+      icon: <Building className="h-5 w-5" />,
       roles: ['admin', 'manager', 'staff']
     },
     { 

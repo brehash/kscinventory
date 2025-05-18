@@ -30,6 +30,13 @@ import UserCreate from './components/users/UserCreate';
 import UserEdit from './components/users/UserEdit';
 import UserProfile from './components/users/UserProfile';
 
+// CRM Components
+import CRMHome from './components/crm/CRMHome';
+import ClientList from './components/crm/ClientList';
+import ClientCreate from './components/crm/ClientCreate';
+import ClientDetails from './components/crm/ClientDetails';
+import ClientEdit from './components/crm/ClientEdit';
+
 function App() {
   return (
     <AuthProvider>
@@ -90,6 +97,13 @@ function App() {
             
             {/* Low Stock Alerts Route */}
             <Route path="alerts" element={<LowStockAlertList />} />
+            
+            {/* CRM Routes */}
+            <Route path="crm" element={<CRMHome />} />
+            <Route path="crm/clients" element={<ClientList />} />
+            <Route path="crm/clients/new" element={<ClientCreate />} />
+            <Route path="crm/clients/:id" element={<ClientDetails />} />
+            <Route path="crm/clients/:id/edit" element={<ClientEdit />} />
             
             {/* User Management Routes - Admin Only */}
             <Route 

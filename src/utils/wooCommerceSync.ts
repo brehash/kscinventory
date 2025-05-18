@@ -304,7 +304,7 @@ const createOrUpdateClient = async (
       };
       
       const clientDocRef = await addDoc(clientsRef, newClient);
-      // console.log(`Created new client ${clientDocRef.id} from WooCommerce order`);
+      console.log(`Created new client ${clientDocRef.id} from WooCommerce order`);
       
       return clientDocRef.id;
     } else {
@@ -482,10 +482,10 @@ const convertWooCommerceOrder = async (wcOrder: any): Promise<Omit<Order, 'id'>>
   
   // Map the status and log it
   const mappedStatus = mapOrderStatus(wcOrder.status);
-  console.log(`Mapped WooCommerce status "${wcOrder.status}" to internal status "${mappedStatus}"`);
+  // console.log(`Mapped WooCommerce status "${wcOrder.status}" to internal status "${mappedStatus}"`);
   
   // DEBUG: Log billing information details to verify client data
-  console.log(`Billing information for order #${wcOrder.number}:`, {
+  // console.log(`Billing information for order #${wcOrder.number}:`, {
     address: billingAddress,
     hasEmail: !!wcOrder.billing?.email,
     emailValue: wcOrder.billing?.email || 'Not provided'
@@ -495,7 +495,7 @@ const convertWooCommerceOrder = async (wcOrder: any): Promise<Omit<Order, 'id'>>
   let clientId: string | null = null; // Initialize as null instead of undefined
   try {
     if (wcOrder.billing?.email) {
-      console.log(`Attempting to create/update client for order #${wcOrder.number}`);
+      // console.log(`Attempting to create/update client for order #${wcOrder.number}`);
       clientId = await createOrUpdateClient(
         customerName,
         wcOrder.billing.email,
@@ -503,7 +503,7 @@ const convertWooCommerceOrder = async (wcOrder: any): Promise<Omit<Order, 'id'>>
         billingAddress
       );
       
-      console.log(`Client process result for order #${wcOrder.number}: clientId=${clientId || 'null'}`);
+      // console.log(`Client process result for order #${wcOrder.number}: clientId=${clientId || 'null'}`);
     } else {
       console.log(`No email available for order #${wcOrder.number}, skipping client creation`);
     }
@@ -540,7 +540,7 @@ const convertWooCommerceOrder = async (wcOrder: any): Promise<Omit<Order, 'id'>>
   // If clientId exists, update client's order statistics
   if (clientId) {
     try {
-      console.log(`Updating order statistics for client ${clientId} with order total ${total}`);
+      // console.log(`Updating order statistics for client ${clientId} with order total ${total}`);
       await updateClientOrderStats(clientId);
     } catch (statsError) {
       console.error(`Error updating client order statistics for client ${clientId}:`, statsError);
@@ -556,7 +556,7 @@ const convertWooCommerceOrder = async (wcOrder: any): Promise<Omit<Order, 'id'>>
 // Sync WooCommerce orders
 export const syncWooCommerceOrders = async (currentUser: User) => {
   try {
-    console.log('Starting WooCommerce orders sync...');
+    // console.log('Starting WooCommerce orders sync...');
     
     // Initialize WooCommerce API
     const api = initWooCommerceAPI();
@@ -565,7 +565,7 @@ export const syncWooCommerceOrders = async (currentUser: User) => {
     if (!localStorage.getItem('wc_url') || 
         !localStorage.getItem('wc_consumer_key') || 
         !localStorage.getItem('wc_consumer_secret')) {
-      console.error('WooCommerce credentials not found');
+      // console.error('WooCommerce credentials not found');
       return { 
         success: false, 
         error: 'WooCommerce credentials not found. Please configure them in Settings > WooCommerce.' 
@@ -573,7 +573,7 @@ export const syncWooCommerceOrders = async (currentUser: User) => {
     }
     
     // Fetch orders from WooCommerce
-    console.log('Fetching orders from WooCommerce API...');
+    // console.log('Fetching orders from WooCommerce API...');
     const response = await api.get('orders', {
       per_page: 100, // Adjust as needed
       orderby: 'date',
@@ -581,7 +581,7 @@ export const syncWooCommerceOrders = async (currentUser: User) => {
     });
     
     if (!response || !response.data) {
-      console.error('No response from WooCommerce API');
+      // console.error('No response from WooCommerce API');
       return { 
         success: false, 
         error: 'No response from WooCommerce API' 
@@ -589,20 +589,20 @@ export const syncWooCommerceOrders = async (currentUser: User) => {
     }
     
     // Log the full response in the console for debugging
-    console.log('WooCommerce API Response:', response);
-    console.log('WooCommerce Orders Data:', response.data);
+    // console.log('WooCommerce API Response:', response);
+    // console.log('WooCommerce Orders Data:', response.data);
     
     const wcOrders = response.data;
-    console.log(`Retrieved ${wcOrders.length} orders from WooCommerce`);
+    // console.log(`Retrieved ${wcOrders.length} orders from WooCommerce`);
     
     // Log statuses for debugging
     const statusCounts: Record<string, number> = {};
     wcOrders.forEach((order: any) => {
       const status = order.status;
       statusCounts[status] = (statusCounts[status] || 0) + 1;
-      console.log(`Order #${order.number} has WooCommerce status: ${status}`);
+      // console.log(`Order #${order.number} has WooCommerce status: ${status}`);
     });
-    console.log('Status distribution from WooCommerce:', statusCounts);
+    // console.log('Status distribution from WooCommerce:', statusCounts);
     
     let newOrders = 0;
     let updatedOrders = 0;
@@ -612,7 +612,7 @@ export const syncWooCommerceOrders = async (currentUser: User) => {
     
     // Process each WooCommerce order
     for (const wcOrder of wcOrders) {
-      console.log(`Processing WooCommerce order #${wcOrder.number} (ID: ${wcOrder.id})`);
+      // console.log(`Processing WooCommerce order #${wcOrder.number} (ID: ${wcOrder.id})`);
       
       // Check if order already exists
       const ordersRef = collection(db, 'orders');
@@ -625,17 +625,17 @@ export const syncWooCommerceOrders = async (currentUser: User) => {
       const snapshot = await getDocs(q);
       
       if (snapshot.empty) {
-        console.log(`Order #${wcOrder.number} is new, creating in Firestore`);
+        // console.log(`Order #${wcOrder.number} is new, creating in Firestore`);
         try {
           // Order doesn't exist, create it
           const newOrderData = await convertWooCommerceOrder(wcOrder);
           
           // DEBUG: Check if the client was processed correctly
-          console.log(`Client status for new order #${wcOrder.number}:`, {
-            clientId: newOrderData.clientId || 'No clientId',
-            customerEmail: newOrderData.customerEmail || 'No email',
-            customerName: newOrderData.customerName
-          });
+          // console.log(`Client status for new order #${wcOrder.number}:`, {
+          //   clientId: newOrderData.clientId || 'No clientId',
+          //   customerEmail: newOrderData.customerEmail || 'No email',
+          //   customerName: newOrderData.customerName
+          // });
           
           // Track client updates
           if (newOrderData.clientId) {
@@ -645,10 +645,10 @@ export const syncWooCommerceOrders = async (currentUser: User) => {
             if (clientDoc.exists()) {
               const clientData = clientDoc.data() as Client;
               if (clientData.totalOrders <= 1) {
-                console.log(`New client detected: ${newOrderData.clientId}`);
+                // console.log(`New client detected: ${newOrderData.clientId}`);
                 newClients++;
               } else {
-                console.log(`Updated client detected: ${newOrderData.clientId}`);
+                // console.log(`Updated client detected: ${newOrderData.clientId}`);
                 updatedClients++;
               }
             }
@@ -669,7 +669,7 @@ export const syncWooCommerceOrders = async (currentUser: User) => {
           
           if (newOrderData.hasUnidentifiedItems) {
             ordersWithUnidentifiedItems++;
-            console.log(`Order #${wcOrder.number} has unidentified items`);
+            // console.log(`Order #${wcOrder.number} has unidentified items`);
           }
           
           newOrders++;
@@ -681,19 +681,19 @@ export const syncWooCommerceOrders = async (currentUser: User) => {
         // Order exists, update it
         const existingOrder = snapshot.docs[0];
         const existingOrderData = existingOrder.data() as Order;
-        console.log(`Order #${wcOrder.number} already exists in Firestore with status: ${existingOrderData.status}`);
+        // console.log(`Order #${wcOrder.number} already exists in Firestore with status: ${existingOrderData.status}`);
         
         try {
           // Convert WooCommerce order to our format
           const newOrderData = await convertWooCommerceOrder(wcOrder);
           
           // DEBUG: Check if the client was processed correctly for existing order
-          console.log(`Client status for existing order #${wcOrder.number}:`, {
-            newClientId: newOrderData.clientId || 'No clientId',
-            existingClientId: existingOrderData.clientId || 'No clientId',
-            customerEmail: newOrderData.customerEmail || 'No email',
-            changeDetected: newOrderData.clientId !== existingOrderData.clientId
-          });
+          // console.log(`Client status for existing order #${wcOrder.number}:`, {
+          //   newClientId: newOrderData.clientId || 'No clientId',
+          //   existingClientId: existingOrderData.clientId || 'No clientId',
+          //   customerEmail: newOrderData.customerEmail || 'No email',
+          //   changeDetected: newOrderData.clientId !== existingOrderData.clientId
+          // });
           
           // Track client updates
           if (newOrderData.clientId && newOrderData.clientId !== existingOrderData.clientId) {
@@ -703,10 +703,10 @@ export const syncWooCommerceOrders = async (currentUser: User) => {
             if (clientDoc.exists()) {
               const clientData = clientDoc.data() as Client;
               if (clientData.totalOrders <= 1) {
-                console.log(`New client detected for existing order: ${newOrderData.clientId}`);
+                // console.log(`New client detected for existing order: ${newOrderData.clientId}`);
                 newClients++;
               } else {
-                console.log(`Updated client detected for existing order: ${newOrderData.clientId}`);
+                // console.log(`Updated client detected for existing order: ${newOrderData.clientId}`);
                 updatedClients++;
               }
             }
@@ -720,8 +720,8 @@ export const syncWooCommerceOrders = async (currentUser: User) => {
             existingOrderData.hasUnidentifiedItems !== newOrderData.hasUnidentifiedItems ||
             existingOrderData.clientId !== newOrderData.clientId
           ) {
-            console.log(`Order #${wcOrder.number} has changes, updating in Firestore`);
-            console.log(`Status change: ${existingOrderData.status} -> ${newOrderData.status}`);
+            // console.log(`Order #${wcOrder.number} has changes, updating in Firestore`);
+            // console.log(`Status change: ${existingOrderData.status} -> ${newOrderData.status}`);
             
             const orderRef = doc(db, 'orders', existingOrder.id);
             
@@ -741,7 +741,7 @@ export const syncWooCommerceOrders = async (currentUser: User) => {
             // Only include clientId if it exists and has changed
             if (newOrderData.clientId && newOrderData.clientId !== existingOrderData.clientId) {
               updatePayload.clientId = newOrderData.clientId;
-              console.log(`Updating clientId from ${existingOrderData.clientId || 'none'} to ${newOrderData.clientId}`);
+              // console.log(`Updating clientId from ${existingOrderData.clientId || 'none'} to ${newOrderData.clientId}`);
             }
             
             await updateDoc(orderRef, updatePayload);

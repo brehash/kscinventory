@@ -399,10 +399,10 @@ const convertWooCommerceOrder = async (wcOrder: any): Promise<Omit<Order, 'id'>>
   
   // DEBUG: Log customer details for client creation
   // console.log(`Customer Info for order #${wcOrder.number}:`, { 
-    name: customerName, 
-    email: customerEmail,
-    phone: wcOrder.billing?.phone || 'Not provided'
-  });
+  //   name: customerName, 
+  //   email: customerEmail,
+  //   phone: wcOrder.billing?.phone || 'Not provided'
+  // });
   
   // Create order items and track unidentified items
   const items: Array<any> = [];

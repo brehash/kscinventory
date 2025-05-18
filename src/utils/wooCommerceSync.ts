@@ -86,7 +86,7 @@ export const testWooCommerceConnection = async (
 
 // Map WooCommerce order status to internal status
 const mapOrderStatus = (wcStatus: string): OrderStatus => {
-  console.log(`Mapping WooCommerce status: ${wcStatus}`);
+  // console.log(`Mapping WooCommerce status: ${wcStatus}`);
   
   // Support both standard WooCommerce statuses and custom statuses with wc- prefix
   switch (wcStatus) {

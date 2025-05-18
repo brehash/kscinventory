@@ -6,6 +6,7 @@ import { Plus, Edit, Trash, AlertTriangle, Globe, Phone } from 'lucide-react';
 import Modal from '../ui/Modal';
 import { useAuth } from '../auth/AuthProvider';
 import { logActivity } from '../../utils/activityLogger';
+import { useNavigate } from 'react-router-dom';
 
 const ProviderSettings: React.FC = () => {
   const [providers, setProviders] = useState<Provider[]>([]);
@@ -25,6 +26,7 @@ const ProviderSettings: React.FC = () => {
   const [showEditModal, setShowEditModal] = useState(false);
 
   const { currentUser } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchProviders = async () => {

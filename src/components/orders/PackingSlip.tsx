@@ -111,11 +111,11 @@ const PackingSlip: React.FC = () => {
           <h2 className="text-lg sm:text-xl font-bold text-gray-800 mb-2">{error || 'Order not found'}</h2>
           <p className="text-gray-600 mb-4">The order you are looking for could not be found.</p>
           <button
-            onClick={() => navigate('/orders')}
+            onClick={() => navigate(-1)}
             className="inline-flex items-center bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Orders
+            Go Back
           </button>
         </div>
       </div>
@@ -127,7 +127,7 @@ const PackingSlip: React.FC = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-0">
         <div className="flex items-center">
           <button
-            onClick={() => navigate(`/orders/${id}`)}
+            onClick={() => navigate(-1)}
             className="mr-3 sm:mr-4 p-1.5 sm:p-2 rounded-full hover:bg-gray-100"
           >
             <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5 text-gray-600" />

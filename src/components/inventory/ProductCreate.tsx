@@ -141,14 +141,21 @@ const ProductCreate: React.FC = () => {
     } else if (queryParams.has('from')) {
       return queryParams.get('from') || '/products';
     }
-    return '/products';
+    return -1; // Use history navigation by default
   };
   
   return (
     <div className="space-y-4 sm:space-y-6">
       <div className="flex items-center mb-3 sm:mb-4">
         <button
-          onClick={() => navigate(getBackNavigation())}
+          onClick={() => {
+            const backDestination = getBackNavigation();
+            if (typeof backDestination === 'number') {
+              navigate(backDestination);
+            } else {
+              navigate(backDestination);
+            }
+          }}
           className="mr-3 sm:mr-4 p-1.5 sm:p-2 rounded-full hover:bg-gray-100"
         >
           <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5 text-gray-600" />
@@ -215,7 +222,14 @@ const ProductCreate: React.FC = () => {
         <ProductForm
           initialData={initialData}
           onSubmit={handleSubmit}
-          onCancel={() => navigate(getBackNavigation())}
+          onCancel={() => {
+            const backDestination = getBackNavigation();
+            if (typeof backDestination === 'number') {
+              navigate(backDestination);
+            } else {
+              navigate(backDestination);
+            }
+          }}
         />
       </div>
     </div>

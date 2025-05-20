@@ -184,7 +184,7 @@ const Sidebar: React.FC = () => {
         >
           <button
             onClick={handleLogout}
-            className="flex items-center p-2 w-full rounded-md text-indigo-100 hover:bg-indigo-700 transition-colors"
+            className="flex items-center p-2 w-full rounded-md text-black hover:bg-indigo-700 transition-colors"
           >
             <LogOut className="h-5 w-5" />
             {!collapsed && <span className="ml-3">Logout</span>}

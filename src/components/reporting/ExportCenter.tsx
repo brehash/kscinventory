@@ -1,10 +1,14 @@
 import React, { useState } from 'react';
-import { Calendar, Download, Loader2, FileSpreadsheet, File as FileCsv, File as FilePdf, FileJson, FileText, Shield, Check } from 'lucide-react';
+import { Calendar, Download, Loader2, FileSpreadsheet, File as FileCsv, File as FilePdf, FileJson, FileText, Shield, Check, AlertTriangle, CheckCircle } from 'lucide-react';
+import { useAuth } from '../auth/AuthProvider';
+import { exportProducts, exportOrders, exportClients, exportActivities, ExportFormat } from '../../utils/reportUtils';
 
 /**
  * Export Center component to export data in various formats
  */
 const ExportCenter: React.FC = () => {
+  const { currentUser } = useAuth();
+  
   // State for date range
   const [startDate, setStartDate] = useState<string>(
     new Date(new Date().getFullYear(), new Date().getMonth(), 1)
@@ -17,13 +21,15 @@ const ExportCenter: React.FC = () => {
   
   // State for export options
   const [selectedDataType, setSelectedDataType] = useState<string>('products');
-  const [selectedFormat, setSelectedFormat] = useState<string>('csv');
+  const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('csv');
   const [includeHeaders, setIncludeHeaders] = useState<boolean>(true);
   const [includeImages, setIncludeImages] = useState<boolean>(false);
   
   // State for UI
   const [loading, setLoading] = useState<boolean>(false);
   const [exportProgress, setExportProgress] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   
   // Data type options
   const dataTypes = [
@@ -41,23 +47,87 @@ const ExportCenter: React.FC = () => {
     { id: 'json', name: 'JSON', description: 'Structured data format for developers', icon: <FileJson className="h-5 w-5 text-amber-500" /> }
   ];
   
-  const handleExport = () => {
-    // This would be implemented to export the data
+  const handleExport = async () => {
+    if (!currentUser) {
+      setError('You must be logged in to export data');
+      return;
+    }
+    
     setLoading(true);
     setExportProgress(0);
+    setError(null);
+    setSuccess(null);
     
-    // Simulate progress
-    const interval = setInterval(() => {
-      setExportProgress(prev => {
-        if (prev === null) return 0;
-        if (prev >= 100) {
-          clearInterval(interval);
-          setLoading(false);
-          return 100;
+    try {
+      // Simulate progress start
+      let progress = 0;
+      const progressInterval = setInterval(() => {
+        progress += 10;
+        if (progress <= 90) {
+          setExportProgress(progress);
         }
-        return prev + 10;
-      });
-    }, 300);
+      }, 200);
+      
+      // Perform the export based on selected data type
+      switch (selectedDataType) {
+        case 'products':
+          await exportProducts(
+            selectedFormat,
+            includeHeaders,
+            { startDate, endDate },
+            currentUser
+          );
+          break;
+          
+        case 'orders':
+          await exportOrders(
+            selectedFormat, 
+            includeHeaders,
+            { startDate, endDate },
+            currentUser
+          );
+          break;
+          
+        case 'clients':
+          await exportClients(
+            selectedFormat,
+            includeHeaders,
+            { startDate, endDate },
+            currentUser
+          );
+          break;
+          
+        case 'activities':
+          await exportActivities(
+            selectedFormat,
+            includeHeaders,
+            { startDate, endDate },
+            currentUser
+          );
+          break;
+          
+        default:
+          throw new Error(`Unsupported data type: ${selectedDataType}`);
+      }
+      
+      // Complete progress and clear interval
+      clearInterval(progressInterval);
+      setExportProgress(100);
+      
+      // Show success message
+      setSuccess(`Export completed successfully. Your ${selectedFormat.toUpperCase()} file has been downloaded.`);
+      
+      // Reset progress after a delay
+      setTimeout(() => {
+        setExportProgress(null);
+      }, 3000);
+    } catch (error) {
+      console.error('Error during export:', error);
+      setError('Export failed. Please try again.');
+      setExportProgress(null);
+    } finally {
+      setLoading(false);
+    }
   };
   
   return (
@@ -66,6 +136,25 @@ const ExportCenter: React.FC = () => {
         <h1 className="text-xl sm:text-2xl font-bold text-gray-800">Export Center</h1>
         <p className="text-sm sm:text-base text-gray-600">Export data in various formats for external use</p>
       </div>
+      
+      {/* Error and Success Messages */}
+      {error && (
+        <div className="bg-red-50 border-l-4 border-red-500 p-4">
+          <div className="flex items-center">
+            <AlertTriangle className="h-5 w-5 text-red-500 mr-2" />
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+        </div>
+      )}
+      
+      {success && (
+        <div className="bg-green-50 border-l-4 border-green-500 p-4">
+          <div className="flex items-center">
+            <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
+            <p className="text-sm text-green-700">{success}</p>
+          </div>
+        </div>
+      )}
       
       {/* Data Selection */}
       <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm">
@@ -109,7 +198,7 @@ const ExportCenter: React.FC = () => {
                       ? 'bg-indigo-50 border-indigo-300'
                       : 'bg-white border-gray-200 hover:bg-gray-50'
                   }`}
-                  onClick={() => setSelectedFormat(format.id)}
+                  onClick={() => setSelectedFormat(format.id as ExportFormat)}
                 >
                   <div className="flex items-start">
                     {format.icon}
@@ -235,7 +324,7 @@ const ExportCenter: React.FC = () => {
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
               <div 
-                className="bg-indigo-600 h-2 rounded-full" 
+                className={`${exportProgress === 100 ? 'bg-green-600' : 'bg-indigo-600'} h-2 rounded-full`}
                 style={{ width: `${exportProgress}%` }}
               ></div>
             </div>

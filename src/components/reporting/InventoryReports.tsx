@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Filter, ArrowDown, Download, Loader2, BarChart2, PieChart } from 'lucide-react';
+import { Calendar, Filter, ArrowDown, Download, Loader2, BarChart2, PieChart, AlertTriangle, CheckCircle } from 'lucide-react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../../config/firebase';
-import { Product, ProductCategory, Location } from '../../types';
+import { Product, ProductCategory, Location, ProductType, Provider } from '../../types';
+import { exportProducts } from '../../utils/reportUtils';
+import { useAuth } from '../auth/AuthProvider';
 
 /**
  * Inventory Reports component to generate and display various inventory-related reports
  */
 const InventoryReports: React.FC = () => {
+  const { currentUser } = useAuth();
+  
   // State for date range
   const [startDate, setStartDate] = useState<string>(
     new Date(new Date().getFullYear(), new Date().getMonth(), 1)
@@ -21,12 +25,22 @@ const InventoryReports: React.FC = () => {
   // State for filters
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedLocation, setSelectedLocation] = useState<string>('');
+  const [selectedProductType, setSelectedProductType] = useState<string>('');
+  const [selectedProvider, setSelectedProvider] = useState<string>('');
+  const [minQuantity, setMinQuantity] = useState<string>('');
+  const [maxQuantity, setMaxQuantity] = useState<string>('');
   const [selectedReportType, setSelectedReportType] = useState<string>('stock-value');
+  const [selectedExportFormat, setSelectedExportFormat] = useState<'csv' | 'xlsx' | 'pdf' | 'json'>('csv');
   
   // State for data loading
   const [loading, setLoading] = useState<boolean>(false);
+  const [exporting, setExporting] = useState<boolean>(false);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [productTypes, setProductTypes] = useState<ProductType[]>([]);
+  const [providers, setProviders] = useState<Provider[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   
   // State for inventory data
   const [inventoryData, setInventoryData] = useState<Product[]>([]);
@@ -50,8 +64,25 @@ const InventoryReports: React.FC = () => {
           ...doc.data()
         })) as Location[];
         setLocations(locationsData);
+        
+        // Fetch product types
+        const typesSnapshot = await getDocs(collection(db, 'productTypes'));
+        const typesData = typesSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as ProductType[];
+        setProductTypes(typesData);
+        
+        // Fetch providers
+        const providersSnapshot = await getDocs(collection(db, 'providers'));
+        const providersData = providersSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Provider[];
+        setProviders(providersData);
       } catch (error) {
         console.error('Error fetching filter options:', error);
+        setError('Failed to load filter options');
       }
     };
     
@@ -61,6 +92,7 @@ const InventoryReports: React.FC = () => {
   // Fetch inventory data based on filters
   const generateReport = () => {
     setLoading(true);
+    setError(null);
     
     // Create the query
     const fetchInventoryData = async () => {
@@ -68,6 +100,7 @@ const InventoryReports: React.FC = () => {
         const productsRef = collection(db, 'products');
         let q = query(productsRef);
         
+        // Apply filters
         if (selectedCategory) {
           q = query(q, where('categoryId', '==', selectedCategory));
         }
@@ -76,16 +109,55 @@ const InventoryReports: React.FC = () => {
           q = query(q, where('locationId', '==', selectedLocation));
         }
         
+        if (selectedProductType) {
+          q = query(q, where('typeId', '==', selectedProductType));
+        }
+        
+        if (selectedProvider) {
+          q = query(q, where('providerId', '==', selectedProvider));
+        }
+        
         const querySnapshot = await getDocs(q);
-        const productsData = querySnapshot.docs.map(doc => ({
+        let productsData = querySnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         })) as Product[];
+        
+        // Apply quantity filters if provided
+        if (minQuantity !== '') {
+          const min = parseInt(minQuantity);
+          if (!isNaN(min)) {
+            productsData = productsData.filter(product => product.quantity >= min);
+          }
+        }
+        
+        if (maxQuantity !== '') {
+          const max = parseInt(maxQuantity);
+          if (!isNaN(max)) {
+            productsData = productsData.filter(product => product.quantity <= max);
+          }
+        }
+        
+        // Sort data based on report type
+        if (selectedReportType === 'stock-value') {
+          productsData.sort((a, b) => {
+            const aValue = (a.cost || 0) * a.quantity;
+            const bValue = (b.cost || 0) * b.quantity;
+            return bValue - aValue; // Sort by descending value
+          });
+        } else if (selectedReportType === 'low-stock') {
+          productsData.sort((a, b) => {
+            const aRatio = a.quantity / a.minQuantity;
+            const bRatio = b.quantity / b.minQuantity;
+            return aRatio - bRatio; // Sort by ascending ratio
+          });
+        }
         
         setInventoryData(productsData);
         setLoading(false);
       } catch (error) {
         console.error('Error fetching inventory data:', error);
+        setError('Failed to load inventory data');
         setLoading(false);
       }
     };
@@ -93,9 +165,41 @@ const InventoryReports: React.FC = () => {
     fetchInventoryData();
   };
   
-  const handleExport = () => {
-    // This would be implemented to export the report data
-    console.log('Exporting report data...');
+  const handleExport = async () => {
+    if (!currentUser) {
+      setError('You must be logged in to export data');
+      return;
+    }
+    
+    setExporting(true);
+    setError(null);
+    setSuccess(null);
+    
+    try {
+      await exportProducts(
+        selectedExportFormat,
+        true, // includeHeaders
+        {
+          categoryId: selectedCategory || undefined,
+          locationId: selectedLocation || undefined,
+          startDate,
+          endDate
+        },
+        currentUser
+      );
+      
+      setSuccess(`Export completed successfully. Your ${selectedExportFormat.toUpperCase()} file has been downloaded.`);
+      
+      // Hide success message after 5 seconds
+      setTimeout(() => {
+        setSuccess(null);
+      }, 5000);
+    } catch (error) {
+      console.error('Error exporting data:', error);
+      setError('Failed to export data. Please try again.');
+    } finally {
+      setExporting(false);
+    }
   };
   
   // Report type options
@@ -106,12 +210,64 @@ const InventoryReports: React.FC = () => {
     { id: 'valuation', name: 'Inventory Valuation Report', description: 'Current value of inventory using different valuation methods' },
   ];
   
+  // Export format options
+  const exportFormats = [
+    { id: 'csv', name: 'CSV', description: 'Comma-separated values, opens with Excel or Numbers' },
+    { id: 'xlsx', name: 'Excel', description: 'Native Microsoft Excel format with formatting' },
+    { id: 'pdf', name: 'PDF', description: 'Portable Document Format for viewing and printing' },
+    { id: 'json', name: 'JSON', description: 'Structured data format for developers' }
+  ];
+  
+  // Get category name by ID
+  const getCategoryName = (categoryId: string) => {
+    const category = categories.find(cat => cat.id === categoryId);
+    return category ? category.name : 'Unknown';
+  };
+  
+  // Get location name by ID
+  const getLocationName = (locationId: string) => {
+    const location = locations.find(loc => loc.id === locationId);
+    return location ? location.name : 'Unknown';
+  };
+  
+  // Get product type name by ID
+  const getProductTypeName = (typeId: string) => {
+    const type = productTypes.find(t => t.id === typeId);
+    return type ? type.name : 'Unknown';
+  };
+  
+  // Get provider name by ID
+  const getProviderName = (providerId: string) => {
+    if (!providerId) return 'None';
+    const provider = providers.find(p => p.id === providerId);
+    return provider ? provider.name : 'Unknown';
+  };
+  
   return (
     <div className="space-y-4 sm:space-y-6">
       <div>
         <h1 className="text-xl sm:text-2xl font-bold text-gray-800">Inventory Reports</h1>
         <p className="text-sm sm:text-base text-gray-600">Generate detailed reports about your inventory status and value</p>
       </div>
+      
+      {/* Error and Success Messages */}
+      {error && (
+        <div className="bg-red-50 border-l-4 border-red-500 p-4">
+          <div className="flex items-center">
+            <AlertTriangle className="h-5 w-5 text-red-500 mr-2" />
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+        </div>
+      )}
+      
+      {success && (
+        <div className="bg-green-50 border-l-4 border-green-500 p-4">
+          <div className="flex items-center">
+            <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
+            <p className="text-sm text-green-700">{success}</p>
+          </div>
+        </div>
+      )}
       
       {/* Report Type Selection */}
       <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm">
@@ -217,16 +373,110 @@ const InventoryReports: React.FC = () => {
               ))}
             </select>
           </div>
+          
+          <div>
+            <label htmlFor="productType" className="block text-sm font-medium text-gray-700 mb-1">
+              <Filter className="inline h-4 w-4 mr-1 text-gray-500" />
+              Product Type
+            </label>
+            <select
+              id="productType"
+              value={selectedProductType}
+              onChange={(e) => setSelectedProductType(e.target.value)}
+              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            >
+              <option value="">All Product Types</option>
+              {productTypes.map(type => (
+                <option key={type.id} value={type.id}>{type.name}</option>
+              ))}
+            </select>
+          </div>
+          
+          <div>
+            <label htmlFor="provider" className="block text-sm font-medium text-gray-700 mb-1">
+              <Filter className="inline h-4 w-4 mr-1 text-gray-500" />
+              Provider
+            </label>
+            <select
+              id="provider"
+              value={selectedProvider}
+              onChange={(e) => setSelectedProvider(e.target.value)}
+              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            >
+              <option value="">All Providers</option>
+              {providers.map(provider => (
+                <option key={provider.id} value={provider.id}>{provider.name}</option>
+              ))}
+            </select>
+          </div>
+          
+          <div>
+            <label htmlFor="minQuantity" className="block text-sm font-medium text-gray-700 mb-1">
+              <Filter className="inline h-4 w-4 mr-1 text-gray-500" />
+              Min Quantity
+            </label>
+            <input
+              type="number"
+              id="minQuantity"
+              value={minQuantity}
+              onChange={(e) => setMinQuantity(e.target.value)}
+              min="0"
+              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            />
+          </div>
+          
+          <div>
+            <label htmlFor="maxQuantity" className="block text-sm font-medium text-gray-700 mb-1">
+              <Filter className="inline h-4 w-4 mr-1 text-gray-500" />
+              Max Quantity
+            </label>
+            <input
+              type="number"
+              id="maxQuantity"
+              value={maxQuantity}
+              onChange={(e) => setMaxQuantity(e.target.value)}
+              min="0"
+              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            />
+          </div>
+        </div>
+        
+        <div className="border-t border-gray-200 pt-4 mb-4">
+          <h3 className="text-sm font-medium text-gray-700 mb-3">Export Format</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {exportFormats.map(format => (
+              <div 
+                key={format.id}
+                className={`border rounded-lg p-2 text-center cursor-pointer ${
+                  selectedExportFormat === format.id 
+                    ? 'bg-indigo-50 border-indigo-300' 
+                    : 'bg-white border-gray-200 hover:bg-gray-50'
+                }`}
+                onClick={() => setSelectedExportFormat(format.id as any)}
+              >
+                <div className="text-xs font-medium">{format.name}</div>
+              </div>
+            ))}
+          </div>
         </div>
         
         <div className="flex justify-end space-x-3">
           <button
             onClick={handleExport}
-            disabled={loading || inventoryData.length === 0}
+            disabled={exporting || inventoryData.length === 0}
             className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
           >
-            <Download className="h-4 w-4 mr-2" />
-            Export Report
+            {exporting ? (
+              <>
+                <Loader2 className="animate-spin h-4 w-4 mr-2" />
+                Exporting...
+              </>
+            ) : (
+              <>
+                <Download className="h-4 w-4 mr-2" />
+                Export Report
+              </>
+            )}
           </button>
           
           <button
@@ -277,6 +527,15 @@ const InventoryReports: React.FC = () => {
                     Name
                   </th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Category
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Location
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Provider
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Quantity
                   </th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -300,7 +559,23 @@ const InventoryReports: React.FC = () => {
                       {product.name}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {product.quantity}
+                      {getCategoryName(product.categoryId)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {getLocationName(product.locationId)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {getProviderName(product.providerId || '')}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <span className={product.quantity <= product.minQuantity ? 'text-amber-500 font-semibold' : ''}>
+                        {product.quantity}
+                      </span>
+                      {product.quantity <= product.minQuantity && (
+                        <span className="ml-1 text-xs text-amber-500">
+                          (Low Stock)
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {product.cost ? `${product.cost.toFixed(2)} RON` : 'N/A'}
@@ -323,19 +598,20 @@ const InventoryReports: React.FC = () => {
                     <td className="px-6 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
                       Totals
                     </td>
-                    <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-500">
+                    <td colSpan={3} className="px-6 py-3"></td>
+                    <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-500 font-medium">
                       {inventoryData.reduce((sum, product) => sum + product.quantity, 0)}
                     </td>
                     <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-500">
                       -
                     </td>
-                    <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-6 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
                       {inventoryData.reduce((sum, product) => sum + (product.cost || 0) * product.quantity, 0).toFixed(2)} RON
                     </td>
                     <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-500">
                       -
                     </td>
-                    <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-6 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
                       {inventoryData.reduce((sum, product) => sum + product.price * product.quantity, 0).toFixed(2)} RON
                     </td>
                   </tr>

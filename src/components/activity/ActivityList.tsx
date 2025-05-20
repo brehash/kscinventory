@@ -3,16 +3,22 @@ import { collection, query, orderBy, getDocs, where, limit, startAfter, getCount
 import { db } from '../../config/firebase';
 import { ActivityLog, ActivityType, ActivityEntityType } from '../../types';
 import { format, parseISO, isValid, isBefore, isAfter, isSameDay } from 'date-fns';
-import { Calendar, Filter, ArrowUp, ArrowDown, User, Clock, Activity, AlertCircle, Loader2, Edit, Trash, Plus, Minus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar, Filter, ArrowUp, ArrowDown, User, Clock, Activity, AlertCircle, Loader2, Edit, Trash, Plus, Minus, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import ReactPaginate from 'react-paginate';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../auth/AuthProvider';
+import { exportActivities } from '../../utils/reportUtils';
 
 const ActivityList: React.FC = () => {
   const navigate = useNavigate();
+  const { currentUser } = useAuth();
+  
   // State for activity logs
   const [activities, setActivities] = useState<ActivityLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
   
   // State for filters
   const [startDate, setStartDate] = useState<string>('');
@@ -24,6 +30,7 @@ const ActivityList: React.FC = () => {
   const [activityTypes, setActivityTypes] = useState<ActivityType[]>([]);
   const [entityTypes, setEntityTypes] = useState<ActivityEntityType[]>([]);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [selectedExportFormat, setSelectedExportFormat] = useState<'csv' | 'xlsx' | 'pdf' | 'json'>('csv');
   
   // Pagination states
   const [currentPage, setCurrentPage] = useState(0);
@@ -235,6 +242,8 @@ const ActivityList: React.FC = () => {
         return 'Provider';
       case 'order':
         return 'Order';
+      case 'export':
+        return 'Export';
       default:
         return type.charAt(0).toUpperCase() + type.slice(1);
     }
@@ -255,6 +264,45 @@ const ActivityList: React.FC = () => {
     }
   };
   
+  // Handle export button click
+  const handleExport = async () => {
+    if (!currentUser) {
+      setError('You must be logged in to export data');
+      return;
+    }
+    
+    setExporting(true);
+    setError(null);
+    setSuccess(null);
+    
+    try {
+      await exportActivities(
+        selectedExportFormat,
+        true, // includeHeaders
+        {
+          type: selectedActivityType || undefined,
+          entityType: selectedEntityType || undefined,
+          userId: selectedUser || undefined,
+          startDate,
+          endDate
+        },
+        currentUser
+      );
+      
+      setSuccess(`Export completed successfully. Your ${selectedExportFormat.toUpperCase()} file has been downloaded.`);
+      
+      // Hide success message after 5 seconds
+      setTimeout(() => {
+        setSuccess(null);
+      }, 5000);
+    } catch (error) {
+      console.error('Error exporting activities:', error);
+      setError('Failed to export activity logs');
+    } finally {
+      setExporting(false);
+    }
+  };
+  
   // Load activities when filters change
   useEffect(() => {
     if (!loading) {
@@ -263,6 +311,14 @@ const ActivityList: React.FC = () => {
       fetchActivities(0);
     }
   }, [selectedActivityType, selectedEntityType, selectedUser, startDate, endDate]);
+  
+  // Export format options
+  const exportFormats = [
+    { id: 'csv', name: 'CSV' },
+    { id: 'xlsx', name: 'Excel' },
+    { id: 'pdf', name: 'PDF' },
+    { id: 'json', name: 'JSON' }
+  ];
   
   if (loading) {
     return (
@@ -291,7 +347,42 @@ const ActivityList: React.FC = () => {
           <h1 className="text-xl sm:text-2xl font-bold text-gray-800">Activity Log</h1>
           <p className="text-sm text-gray-600">View all activity across your inventory system</p>
         </div>
+        
+        {/* Export button */}
+        <div className="flex items-center space-x-2">
+          <select
+            value={selectedExportFormat}
+            onChange={(e) => setSelectedExportFormat(e.target.value as any)}
+            className="text-xs border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 mr-2"
+          >
+            {exportFormats.map(format => (
+              <option key={format.id} value={format.id}>{format.name}</option>
+            ))}
+          </select>
+          <button
+            onClick={handleExport}
+            disabled={exporting || activities.length === 0}
+            className="inline-flex items-center px-2 py-1 sm:px-3 sm:py-1.5 border border-gray-300 text-xs shadow-sm font-medium rounded text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+          >
+            {exporting ? (
+              <Loader2 className="animate-spin h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+            ) : (
+              <Download className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+            )}
+            Export
+          </button>
+        </div>
       </div>
+      
+      {/* Success Message */}
+      {success && (
+        <div className="bg-green-50 border-l-4 border-green-500 p-4">
+          <div className="flex items-center">
+            <AlertCircle className="h-4 w-4 sm:h-5 sm:w-5 text-green-500 mr-2" />
+            <p className="text-xs sm:text-sm text-green-700">{success}</p>
+          </div>
+        </div>
+      )}
       
       <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm">
         <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 sm:gap-4 bg-gray-50 p-3 sm:p-4 rounded-lg mb-4">

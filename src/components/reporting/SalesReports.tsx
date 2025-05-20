@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Filter, Download, Loader2, LineChart, BarChart2, PieChart } from 'lucide-react';
+import { Calendar, Filter, Download, Loader2, LineChart, BarChart2, PieChart, AlertTriangle, CheckCircle } from 'lucide-react';
 import { collection, getDocs, query, where, orderBy, Timestamp } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { Order } from '../../types';
+import { exportOrders } from '../../utils/reportUtils';
+import { useAuth } from '../auth/AuthProvider';
 
 /**
  * Sales Reports component to generate and display various sales-related reports
  */
 const SalesReports: React.FC = () => {
+  const { currentUser } = useAuth();
+  
   // State for date range
   const [startDate, setStartDate] = useState<string>(
     new Date(new Date().getFullYear(), new Date().getMonth(), 1)
@@ -21,10 +25,17 @@ const SalesReports: React.FC = () => {
   // State for filters
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('');
   const [selectedStatus, setSelectedStatus] = useState<string>('');
+  const [selectedSource, setSelectedSource] = useState<string>('');
   const [selectedReportType, setSelectedReportType] = useState<string>('sales-over-time');
+  const [selectedExportFormat, setSelectedExportFormat] = useState<'csv' | 'xlsx' | 'pdf' | 'json'>('csv');
+  const [minTotal, setMinTotal] = useState<string>('');
+  const [maxTotal, setMaxTotal] = useState<string>('');
   
   // State for data loading
   const [loading, setLoading] = useState<boolean>(false);
+  const [exporting, setExporting] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   
   // State for sales data
   const [salesData, setSalesData] = useState<Order[]>([]);
@@ -32,6 +43,7 @@ const SalesReports: React.FC = () => {
   // Fetch sales data based on filters
   const generateReport = () => {
     setLoading(true);
+    setError(null);
     
     // Create the query
     const fetchSalesData = async () => {
@@ -61,8 +73,12 @@ const SalesReports: React.FC = () => {
           q = query(q, where('paymentMethod', '==', selectedPaymentMethod));
         }
         
+        if (selectedSource) {
+          q = query(q, where('source', '==', selectedSource));
+        }
+        
         const querySnapshot = await getDocs(q);
-        const ordersData = querySnapshot.docs.map(doc => ({
+        let ordersData = querySnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),
           orderDate: doc.data().orderDate?.toDate() || new Date(),
@@ -71,10 +87,33 @@ const SalesReports: React.FC = () => {
           ...(doc.data().fulfilledAt ? { fulfilledAt: doc.data().fulfilledAt.toDate() } : {})
         })) as Order[];
         
+        // Apply total filters if provided
+        if (minTotal !== '') {
+          const min = parseFloat(minTotal);
+          if (!isNaN(min)) {
+            ordersData = ordersData.filter(order => order.total >= min);
+          }
+        }
+        
+        if (maxTotal !== '') {
+          const max = parseFloat(maxTotal);
+          if (!isNaN(max)) {
+            ordersData = ordersData.filter(order => order.total <= max);
+          }
+        }
+        
+        // Sort data based on report type
+        if (selectedReportType === 'sales-by-product') {
+          // For sales by product, we might need additional processing
+          // This is just a placeholder - actual implementation would depend on requirements
+          ordersData.sort((a, b) => b.total - a.total);
+        }
+        
         setSalesData(ordersData);
         setLoading(false);
       } catch (error) {
         console.error('Error fetching sales data:', error);
+        setError('Failed to load sales data');
         setLoading(false);
       }
     };
@@ -82,9 +121,41 @@ const SalesReports: React.FC = () => {
     fetchSalesData();
   };
   
-  const handleExport = () => {
-    // This would be implemented to export the report data
-    console.log('Exporting sales report data...');
+  const handleExport = async () => {
+    if (!currentUser) {
+      setError('You must be logged in to export data');
+      return;
+    }
+    
+    setExporting(true);
+    setError(null);
+    setSuccess(null);
+    
+    try {
+      await exportOrders(
+        selectedExportFormat,
+        true, // includeHeaders
+        {
+          status: selectedStatus || undefined,
+          paymentMethod: selectedPaymentMethod || undefined,
+          startDate,
+          endDate
+        },
+        currentUser
+      );
+      
+      setSuccess(`Export completed successfully. Your ${selectedExportFormat.toUpperCase()} file has been downloaded.`);
+      
+      // Hide success message after 5 seconds
+      setTimeout(() => {
+        setSuccess(null);
+      }, 5000);
+    } catch (error) {
+      console.error('Error exporting data:', error);
+      setError('Failed to export data. Please try again.');
+    } finally {
+      setExporting(false);
+    }
   };
   
   // Report type options
@@ -92,6 +163,14 @@ const SalesReports: React.FC = () => {
     { id: 'sales-over-time', name: 'Sales Over Time', description: 'Track sales trends over daily, weekly, or monthly periods', icon: <LineChart className="h-5 w-5" /> },
     { id: 'sales-by-product', name: 'Sales by Product', description: 'Analyze which products are generating the most revenue', icon: <BarChart2 className="h-5 w-5" /> },
     { id: 'payment-methods', name: 'Payment Method Analysis', description: 'Breakdown of sales by payment method', icon: <PieChart className="h-5 w-5" /> }
+  ];
+  
+  // Export format options
+  const exportFormats = [
+    { id: 'csv', name: 'CSV', description: 'Comma-separated values, opens with Excel or Numbers' },
+    { id: 'xlsx', name: 'Excel', description: 'Native Microsoft Excel format with formatting' },
+    { id: 'pdf', name: 'PDF', description: 'Portable Document Format for viewing and printing' },
+    { id: 'json', name: 'JSON', description: 'Structured data format for developers' }
   ];
   
   // Payment method options
@@ -115,6 +194,12 @@ const SalesReports: React.FC = () => {
     { id: 'expediata', name: 'Expediata' }
   ];
   
+  // Order source options
+  const orderSources = [
+    { id: 'manual', name: 'Manual' },
+    { id: 'woocommerce', name: 'WooCommerce' }
+  ];
+  
   // Calculate total sales amount
   const calculateTotalSales = () => {
     return salesData.reduce((sum, order) => sum + order.total, 0).toFixed(2);
@@ -132,6 +217,25 @@ const SalesReports: React.FC = () => {
         <h1 className="text-xl sm:text-2xl font-bold text-gray-800">Sales Reports</h1>
         <p className="text-sm sm:text-base text-gray-600">Analyze your sales data and identify trends</p>
       </div>
+      
+      {/* Error and Success Messages */}
+      {error && (
+        <div className="bg-red-50 border-l-4 border-red-500 p-4">
+          <div className="flex items-center">
+            <AlertTriangle className="h-5 w-5 text-red-500 mr-2" />
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+        </div>
+      )}
+      
+      {success && (
+        <div className="bg-green-50 border-l-4 border-green-500 p-4">
+          <div className="flex items-center">
+            <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
+            <p className="text-sm text-green-700">{success}</p>
+          </div>
+        </div>
+      )}
       
       {/* Report Type Selection */}
       <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm">
@@ -170,7 +274,7 @@ const SalesReports: React.FC = () => {
       <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm">
         <h2 className="text-base sm:text-lg font-semibold mb-4">Report Filters</h2>
         
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
           <div>
             <label htmlFor="startDate" className="block text-sm font-medium text-gray-700 mb-1">
               <Calendar className="inline h-4 w-4 mr-1 text-gray-500" />
@@ -234,16 +338,94 @@ const SalesReports: React.FC = () => {
               ))}
             </select>
           </div>
+          
+          <div>
+            <label htmlFor="source" className="block text-sm font-medium text-gray-700 mb-1">
+              <Filter className="inline h-4 w-4 mr-1 text-gray-500" />
+              Order Source
+            </label>
+            <select
+              id="source"
+              value={selectedSource}
+              onChange={(e) => setSelectedSource(e.target.value)}
+              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            >
+              <option value="">All Sources</option>
+              {orderSources.map(source => (
+                <option key={source.id} value={source.id}>{source.name}</option>
+              ))}
+            </select>
+          </div>
+          
+          <div>
+            <label htmlFor="minTotal" className="block text-sm font-medium text-gray-700 mb-1">
+              <Filter className="inline h-4 w-4 mr-1 text-gray-500" />
+              Min Total (RON)
+            </label>
+            <input
+              type="number"
+              id="minTotal"
+              value={minTotal}
+              onChange={(e) => setMinTotal(e.target.value)}
+              min="0"
+              step="0.01"
+              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            />
+          </div>
+          
+          <div>
+            <label htmlFor="maxTotal" className="block text-sm font-medium text-gray-700 mb-1">
+              <Filter className="inline h-4 w-4 mr-1 text-gray-500" />
+              Max Total (RON)
+            </label>
+            <input
+              type="number"
+              id="maxTotal"
+              value={maxTotal}
+              onChange={(e) => setMaxTotal(e.target.value)}
+              min="0"
+              step="0.01"
+              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            />
+          </div>
+        </div>
+        
+        <div className="border-t border-gray-200 pt-4 mb-4">
+          <h3 className="text-sm font-medium text-gray-700 mb-3">Export Format</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {exportFormats.map(format => (
+              <div 
+                key={format.id}
+                className={`border rounded-lg p-2 text-center cursor-pointer ${
+                  selectedExportFormat === format.id 
+                    ? 'bg-indigo-50 border-indigo-300' 
+                    : 'bg-white border-gray-200 hover:bg-gray-50'
+                }`}
+                onClick={() => setSelectedExportFormat(format.id as any)}
+              >
+                <div className="text-xs font-medium">{format.name}</div>
+              </div>
+            ))}
+          </div>
         </div>
         
         <div className="flex justify-end space-x-3">
           <button
             onClick={handleExport}
-            disabled={loading || salesData.length === 0}
+            disabled={exporting || salesData.length === 0}
             className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
           >
-            <Download className="h-4 w-4 mr-2" />
-            Export Report
+            {exporting ? (
+              <>
+                <Loader2 className="animate-spin h-4 w-4 mr-2" />
+                Exporting...
+              </>
+            ) : (
+              <>
+                <Download className="h-4 w-4 mr-2" />
+                Export Report
+              </>
+            )}
           </button>
           
           <button
@@ -326,6 +508,12 @@ const SalesReports: React.FC = () => {
                     Payment
                   </th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Source
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Items
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Total
                   </th>
                 </tr>
@@ -341,6 +529,9 @@ const SalesReports: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {order.customerName}
+                      {order.customerEmail && (
+                        <div className="text-xs text-gray-500">{order.customerEmail}</div>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
@@ -355,6 +546,16 @@ const SalesReports: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {order.paymentMethod}
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        order.source === 'woocommerce' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {order.source}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                      {order.items.length}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                       {order.total.toFixed(2)} RON
                     </td>
@@ -364,7 +565,7 @@ const SalesReports: React.FC = () => {
               {salesData.length > 0 && (
                 <tfoot className="bg-gray-50">
                   <tr>
-                    <td colSpan={5} className="px-6 py-3 whitespace-nowrap text-sm font-medium text-gray-900 text-right">
+                    <td colSpan={7} className="px-6 py-3 whitespace-nowrap text-sm font-medium text-gray-900 text-right">
                       Total:
                     </td>
                     <td className="px-6 py-3 whitespace-nowrap text-sm font-bold text-gray-900">

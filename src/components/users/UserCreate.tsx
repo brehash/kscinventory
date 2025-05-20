@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, AlertTriangle, Loader2, Shield } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, Loader2, Shield, CheckCircle } from 'lucide-react';
 import { useAuth } from '../auth/AuthProvider';
 import { collection, doc, setDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
@@ -22,6 +22,7 @@ const UserCreate: React.FC = () => {
   // UI state
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
   
   // Password strength validation
   const validatePassword = (password: string) => {
@@ -102,8 +103,20 @@ const UserCreate: React.FC = () => {
         currentUser
       );
       
-      // Navigate back to the users list
-      navigate('/users');
+      // Show success message
+      setSuccess(true);
+      
+      // Reset form
+      setEmail('');
+      setPassword('');
+      setConfirmPassword('');
+      setDisplayName('');
+      setRole('staff');
+      
+      // Hide success message after 5 seconds
+      setTimeout(() => {
+        setSuccess(false);
+      }, 5000);
       
     } catch (err: any) {
       console.error('Error creating user:', err);
@@ -144,6 +157,15 @@ const UserCreate: React.FC = () => {
           <div className="flex items-center">
             <AlertTriangle className="h-5 w-5 text-red-500 mr-2" />
             <p className="text-sm text-red-700">{error}</p>
+          </div>
+        </div>
+      )}
+      
+      {success && (
+        <div className="bg-green-50 border-l-4 border-green-500 p-4">
+          <div className="flex items-center">
+            <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
+            <p className="text-sm text-green-700">User created successfully!</p>
           </div>
         </div>
       )}

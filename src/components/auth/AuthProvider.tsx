@@ -98,6 +98,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         createdAt: new Date(),
         lastLogin: new Date()
       });
+      
+      // Don't automatically sign in the newly created user
+      return firebaseUser.uid;
     } catch (error) {
       console.error('Error registering user:', error);
       throw error;

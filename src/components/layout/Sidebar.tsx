@@ -205,7 +205,7 @@ const Sidebar: React.FC = () => {
       <div className="md:hidden absolute top-3 left-1 z-20">
         <button
           onClick={toggleMobileSidebar}
-          className="p-2 rounded-md bg-gray-100 text-black"
+          className="p-2 rounded-md bg-gray-200 text-black"
         >
           <Menu className="h-5 w-5" />
         </button>
@@ -213,7 +213,7 @@ const Sidebar: React.FC = () => {
 
       {/* Desktop sidebar */}
       <div 
-        className={`h-screen bg-gray-100 text-white flex-col transition-all duration-300 hidden md:flex ${
+        className={`h-screen bg-gray-200 text-white flex-col transition-all duration-300 hidden md:flex ${
           collapsed ? 'md:w-16' : 'md:w-64'
         }`}
       >

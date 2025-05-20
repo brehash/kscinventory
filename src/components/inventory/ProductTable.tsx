@@ -14,6 +14,7 @@ interface ProductTableProps {
   handleSort: (field: keyof Product) => void;
   handleOpenEditModal: (product: Product) => void;
   confirmDelete: (product: Product) => void;
+  handleMoveItems?: (product: Product) => void;
 }
 
 const ProductTable: React.FC<ProductTableProps> = ({
@@ -26,7 +27,8 @@ const ProductTable: React.FC<ProductTableProps> = ({
   sortDirection,
   handleSort,
   handleOpenEditModal,
-  confirmDelete
+  confirmDelete,
+  handleMoveItems
 }) => {
   return (
     <div className="overflow-x-auto">
@@ -137,6 +139,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
                 getProviderName={getProviderName}
                 onEdit={handleOpenEditModal}
                 onDelete={confirmDelete}
+                onMove={handleMoveItems}
               />
             ))
           ) : (

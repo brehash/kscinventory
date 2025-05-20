@@ -14,6 +14,7 @@ import ProductListFilters from './ProductListFilters';
 import ProductTable from './ProductTable';
 import ProductPagination from './ProductPagination';
 import ProductDeleteConfirmation from './ProductDeleteConfirmation';
+import MoveItemModal from './MoveItemModal';
 
 const ProductList: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -41,8 +42,10 @@ const ProductList: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showMoveModal, setShowMoveModal] = useState(false);
   const [productToEdit, setProductToEdit] = useState<Product | null>(null);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const [productToMove, setProductToMove] = useState<Product | null>(null);
 
   const { currentUser } = useAuth();
   const navigate = useNavigate();
@@ -414,6 +417,11 @@ const ProductList: React.FC = () => {
     setShowEditModal(true);
   };
 
+  const handleOpenMoveModal = (product: Product) => {
+    setProductToMove(product);
+    setShowMoveModal(true);
+  };
+
   const confirmDelete = (product: Product) => {
     setProductToDelete(product);
     setShowDeleteModal(true);
@@ -438,6 +446,12 @@ const ProductList: React.FC = () => {
     if (!providerId) return 'None';
     const provider = providers.find(p => p.id === providerId);
     return provider ? provider.name : 'Unknown';
+  };
+
+  // Handle move success
+  const handleMoveSuccess = (sourceLocationId: string, destinationLocationId: string, quantity: number) => {
+    // Refresh the products list
+    fetchProducts(currentPage);
   };
 
   if (loading) {
@@ -492,6 +506,7 @@ const ProductList: React.FC = () => {
           handleSort={handleSort}
           handleOpenEditModal={handleOpenEditModal}
           confirmDelete={confirmDelete}
+          handleMoveItems={handleOpenMoveModal}
         />
         
         {/* Pagination */}
@@ -543,6 +558,17 @@ const ProductList: React.FC = () => {
         onClose={() => setShowDeleteModal(false)}
         onDelete={handleDelete}
         productName={productToDelete?.name}
+      />
+
+      {/* Move items modal */}
+      <MoveItemModal
+        isOpen={showMoveModal}
+        onClose={() => {
+          setShowMoveModal(false);
+          setProductToMove(null);
+        }}
+        product={productToMove}
+        onSuccess={handleMoveSuccess}
       />
     </div>
   );

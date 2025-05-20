@@ -79,6 +79,21 @@ export interface PriceHistory {
   changePercentage: number;
 }
 
+// Item Movement Type
+export interface ItemMovement {
+  id?: string;
+  productId: string;
+  productName: string;
+  sourceLocationId: string;
+  sourceLocationName: string;
+  destinationLocationId: string;
+  destinationLocationName: string;
+  quantity: number;
+  movedAt: Date;
+  movedBy: string;
+  movedByName: string;
+}
+
 // Dashboard Types
 export interface DashboardStats {
   totalProducts: number;
@@ -101,7 +116,7 @@ export interface LowStockAlert {
 }
 
 // Activity Log Types
-export type ActivityType = 'added' | 'removed' | 'updated' | 'deleted';
+export type ActivityType = 'added' | 'removed' | 'updated' | 'deleted' | 'moved';
 export type ActivityEntityType = 'product' | 'category' | 'location' | 'productType' | 'provider' | 'order' | 'user' | 'client' | 'note';
 
 export interface ActivityLog {
@@ -114,6 +129,8 @@ export interface ActivityLog {
   date: Date;
   userId: string;
   userName: string;
+  sourceLocationId?: string; // For item movement
+  destinationLocationId?: string; // For item movement
 }
 
 // Auth Context Types
@@ -133,8 +150,9 @@ export interface OrderItem {
   productName: string;
   quantity: number;
   price: number;
-  picked: boolean;
+  picked?: boolean;
   total: number;
+  locationId?: string; // Optional field to track which location the item came from
 }
 
 // New interface for unidentified WooCommerce items

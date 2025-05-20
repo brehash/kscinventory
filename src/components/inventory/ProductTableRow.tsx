@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Product } from '../../types';
-import { Edit, Trash, AlertTriangle } from 'lucide-react';
+import { Edit, Trash, AlertTriangle, ArrowRightLeft } from 'lucide-react';
 
 interface ProductTableRowProps {
   product: Product;
@@ -10,6 +10,7 @@ interface ProductTableRowProps {
   getProviderName: (providerId: string) => string;
   onEdit: (product: Product) => void;
   onDelete: (product: Product) => void;
+  onMove?: (product: Product) => void;
 }
 
 const ProductTableRow: React.FC<ProductTableRowProps> = ({
@@ -18,7 +19,8 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
   getLocationName,
   getProviderName,
   onEdit,
-  onDelete
+  onDelete,
+  onMove
 }) => {
   return (
     <tr className="hover:bg-gray-50">
@@ -78,15 +80,26 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
               <circle cx="12" cy="12" r="3" />
             </svg>
           </Link>
+          {onMove && (
+            <button
+              onClick={() => onMove(product)}
+              className="text-amber-600 hover:text-amber-900"
+              title="Move items"
+            >
+              <ArrowRightLeft className="h-4 w-4 sm:h-5 sm:w-5" />
+            </button>
+          )}
           <button
             onClick={() => onEdit(product)}
             className="text-indigo-600 hover:text-indigo-900"
+            title="Edit product"
           >
             <Edit className="h-4 w-4 sm:h-5 sm:w-5" />
           </button>
           <button
             onClick={() => onDelete(product)}
             className="text-red-600 hover:text-red-900"
+            title="Delete product"
           >
             <Trash className="h-4 w-4 sm:h-5 sm:w-5" />
           </button>

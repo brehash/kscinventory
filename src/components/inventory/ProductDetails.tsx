@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc, collection, getDocs, query, orderBy, limit, updateDoc, addDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, query, orderBy, where, updateDoc, addDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { Product, ProductCategory, ProductType, Location, Provider, PriceHistory } from '../../types';
 import { 
@@ -14,12 +14,14 @@ import {
   TrendingDown,
   History,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  ArrowRightLeft
 } from 'lucide-react';
 import PriceHistoryTable from './PriceHistoryTable';
 import ProductActivityLog from '../activity/ProductActivityLog';
 import Modal from '../ui/Modal';
 import ProductForm from './ProductForm';
+import MoveItemModal from './MoveItemModal';
 import { useAuth } from '../auth/AuthProvider';
 import { logActivity } from '../../utils/activityLogger';
 
@@ -40,6 +42,9 @@ const ProductDetails: React.FC = () => {
   
   // Add state for edit modal
   const [showEditModal, setShowEditModal] = useState(false);
+
+  // Add state for move item modal
+  const [showMoveModal, setShowMoveModal] = useState(false);
 
   useEffect(() => {
     const fetchProductDetails = async () => {
@@ -188,6 +193,39 @@ const ProductDetails: React.FC = () => {
     }
   };
 
+  // Handle successful move of items between locations
+  const handleMoveSuccess = async (sourceLocationId: string, destinationLocationId: string, quantity: number) => {
+    if (!product || !id || !currentUser) return;
+    
+    try {
+      // Refresh product data after move
+      const productRef = doc(db, 'products', id);
+      const productDoc = await getDoc(productRef);
+      
+      if (productDoc.exists()) {
+        const updatedProductData = { 
+          id: productDoc.id, 
+          ...productDoc.data() 
+        } as Product;
+        
+        setProduct(updatedProductData);
+        
+        // Refresh location data if it changed
+        if (updatedProductData.locationId !== product.locationId) {
+          const locationDoc = await getDoc(doc(db, 'locations', updatedProductData.locationId));
+          if (locationDoc.exists()) {
+            setLocation({ 
+              id: locationDoc.id, 
+              ...locationDoc.data() 
+            } as Location);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error refreshing product details after move:', err);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -246,13 +284,22 @@ const ProductDetails: React.FC = () => {
             <p className="text-xs sm:text-base text-gray-600">Product Details</p>
           </div>
         </div>
-        <button
-          onClick={() => setShowEditModal(true)}
-          className="inline-flex items-center bg-indigo-600 text-white px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm rounded-md hover:bg-indigo-700 transition-colors"
-        >
-          <Edit className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-          Edit Product
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowMoveModal(true)}
+            className="inline-flex items-center bg-amber-600 text-white px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm rounded-md hover:bg-amber-700 transition-colors"
+          >
+            <ArrowRightLeft className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+            Move Items
+          </button>
+          <button
+            onClick={() => setShowEditModal(true)}
+            className="inline-flex items-center bg-indigo-600 text-white px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm rounded-md hover:bg-indigo-700 transition-colors"
+          >
+            <Edit className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+            Edit Product
+          </button>
+        </div>
       </div>
       
       <div className="bg-white rounded-lg shadow-sm overflow-hidden">
@@ -509,6 +556,14 @@ const ProductDetails: React.FC = () => {
           onCancel={() => setShowEditModal(false)}
         />
       </Modal>
+
+      {/* Move Item Modal */}
+      <MoveItemModal 
+        isOpen={showMoveModal}
+        onClose={() => setShowMoveModal(false)}
+        product={product}
+        onSuccess={handleMoveSuccess}
+      />
     </div>
   );
 };

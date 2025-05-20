@@ -159,7 +159,7 @@ const Sidebar: React.FC = () => {
                     {!collapsed && <span className="ml-3">{item.name}</span>}
                   </NavLink>
                   {collapsed && hoveredItem === item.name && (
-                    <div className="absolute left-12 top-1/2 -translate-y-1/2 bg-gray-800 text-white text-xs rounded py-1 px-2 z-10 whitespace-nowrap">
+                    <div className="absolute left-12 top-1/2 -translate-y-1/2 bg-gray-200 text-black text-xs rounded py-1 px-2 z-10 whitespace-nowrap">
                       {item.name}
                     </div>
                   )}

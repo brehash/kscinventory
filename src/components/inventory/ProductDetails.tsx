@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc, collection, getDocs, query, orderBy, where, updateDoc, addDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, query, orderBy, where, updateDoc, addDoc, limit } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { Product, ProductCategory, ProductType, Location, Provider, PriceHistory } from '../../types';
 import { 

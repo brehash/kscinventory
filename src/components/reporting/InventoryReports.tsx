@@ -178,6 +178,7 @@ const InventoryReports: React.FC = () => {
     setSuccess(null);
     
     try {
+      // Pass the selectedReportType to exportProducts
       await exportProducts(
         selectedExportFormat,
         true, // includeHeaders
@@ -191,10 +192,11 @@ const InventoryReports: React.FC = () => {
           startDate,
           endDate
         },
-        currentUser
+        currentUser,
+        selectedReportType // Pass the selected report type
       );
       
-      setSuccess(`Export completed successfully. Your ${selectedExportFormat.toUpperCase()} file has been downloaded.`);
+      setSuccess(`${selectedReportType.replace('-', ' ')} report exported successfully as ${selectedExportFormat.toUpperCase()}.`);
       
       // Hide success message after 5 seconds
       setTimeout(() => {

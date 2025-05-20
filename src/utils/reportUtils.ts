@@ -181,6 +181,96 @@ export const exportDataAsFile = (
 };
 
 /**
+ * Export activities data in the specified format
+ * @param format The export format
+ * @param includeHeaders Whether to include column headers
+ * @param filters Optional filters to apply
+ * @param currentUser The current user
+ */
+export const exportActivities = async (
+  format: ExportFormat,
+  includeHeaders: boolean = true,
+  filters: {
+    type?: string;
+    entityType?: string;
+    userId?: string;
+    startDate?: string;
+    endDate?: string;
+  } = {},
+  currentUser: User
+): Promise<void> => {
+  try {
+    // Fetch activities with optional filters
+    const activitiesRef = collection(db, 'activities');
+    let q = query(activitiesRef, orderBy('date', 'desc'));
+    
+    // Apply filters if provided
+    if (filters.type) {
+      q = query(q, where('type', '==', filters.type));
+    }
+    
+    if (filters.entityType) {
+      q = query(q, where('entityType', '==', filters.entityType));
+    }
+    
+    if (filters.userId) {
+      q = query(q, where('userId', '==', filters.userId));
+    }
+    
+    // Apply date range filters
+    if (filters.startDate) {
+      const startDateObj = new Date(filters.startDate);
+      startDateObj.setHours(0, 0, 0, 0); // Start of day
+      q = query(q, where('date', '>=', startDateObj));
+    }
+    
+    if (filters.endDate) {
+      const endDateObj = new Date(filters.endDate);
+      endDateObj.setHours(23, 59, 59, 999); // End of day
+      q = query(q, where('date', '<=', endDateObj));
+    }
+    
+    const querySnapshot = await getDocs(q);
+    
+    // Process activities with transformations for export
+    const activities = querySnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        date: data.date?.toDate?.() ? data.date.toDate().toISOString() : new Date().toISOString(),
+        user: data.userName || 'Unknown',
+        activity_type: data.type || 'Unknown',
+        entity_type: data.entityType || 'Unknown',
+        entity_name: data.entityName || '',
+        details: data.details || '',
+        quantity: data.quantity !== undefined ? data.quantity : '',
+        created_at: data.createdAt?.toDate?.() ? data.createdAt.toDate().toISOString() : ''
+      };
+    });
+    
+    // Log the export activity
+    await logActivity(
+      'added',
+      'export', 
+      Date.now().toString(), // Using timestamp as ID
+      `Activities Export (${format.toUpperCase()})`,
+      currentUser
+    );
+    
+    // Generate filename
+    const filename = generateFilename('activities', format);
+    
+    // Export the data
+    exportDataAsFile(activities, format, filename, includeHeaders);
+    
+    return Promise.resolve();
+  } catch (error) {
+    console.error('Error exporting activities:', error);
+    return Promise.reject(error);
+  }
+};
+
+/**
  * Export products data in the specified format
  * @param format The export format
  * @param includeHeaders Whether to include column headers

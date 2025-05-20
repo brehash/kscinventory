@@ -5,6 +5,8 @@ import { db } from '../../config/firebase';
 import { Order } from '../../types';
 import { exportOrders } from '../../utils/reportUtils';
 import { useAuth } from '../auth/AuthProvider';
+import ReportTooltip from './ReportTooltip';
+import FilterTag from './FilterTag';
 
 /**
  * Sales Reports component to generate and display various sales-related reports
@@ -30,6 +32,7 @@ const SalesReports: React.FC = () => {
   const [selectedExportFormat, setSelectedExportFormat] = useState<'csv' | 'xlsx' | 'pdf' | 'json'>('csv');
   const [minTotal, setMinTotal] = useState<string>('');
   const [maxTotal, setMaxTotal] = useState<string>('');
+  const [selectedClient, setSelectedClient] = useState<string>('');
   
   // State for data loading
   const [loading, setLoading] = useState<boolean>(false);
@@ -39,6 +42,28 @@ const SalesReports: React.FC = () => {
   
   // State for sales data
   const [salesData, setSalesData] = useState<Order[]>([]);
+  const [clients, setClients] = useState<Array<{id: string, name: string}>>([]);
+  
+  // Load clients for filter dropdown
+  useEffect(() => {
+    const fetchClients = async () => {
+      try {
+        const clientsRef = collection(db, 'clients');
+        const clientsSnapshot = await getDocs(clientsRef);
+        
+        const clientsData = clientsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          name: doc.data().name
+        }));
+        
+        setClients(clientsData);
+      } catch (error) {
+        console.error('Error fetching clients:', error);
+      }
+    };
+    
+    fetchClients();
+  }, []);
   
   // Fetch sales data based on filters
   const generateReport = () => {
@@ -75,6 +100,10 @@ const SalesReports: React.FC = () => {
         
         if (selectedSource) {
           q = query(q, where('source', '==', selectedSource));
+        }
+        
+        if (selectedClient) {
+          q = query(q, where('clientId', '==', selectedClient));
         }
         
         const querySnapshot = await getDocs(q);
@@ -138,6 +167,10 @@ const SalesReports: React.FC = () => {
         {
           status: selectedStatus || undefined,
           paymentMethod: selectedPaymentMethod || undefined,
+          source: selectedSource || undefined,
+          clientId: selectedClient || undefined,
+          minTotal: minTotal ? parseFloat(minTotal) : undefined,
+          maxTotal: maxTotal ? parseFloat(maxTotal) : undefined,
           startDate,
           endDate
         },
@@ -156,6 +189,25 @@ const SalesReports: React.FC = () => {
     } finally {
       setExporting(false);
     }
+  };
+  
+  const clearFilters = () => {
+    setSelectedPaymentMethod('');
+    setSelectedStatus('');
+    setSelectedSource('');
+    setMinTotal('');
+    setMaxTotal('');
+    setSelectedClient('');
+  };
+  
+  // Check if any filter is active
+  const hasActiveFilters = () => {
+    return selectedPaymentMethod !== '' || 
+           selectedStatus !== '' || 
+           selectedSource !== '' || 
+           minTotal !== '' || 
+           maxTotal !== '' ||
+           selectedClient !== '';
   };
   
   // Report type options
@@ -209,6 +261,13 @@ const SalesReports: React.FC = () => {
   const calculateAverageOrderValue = () => {
     if (salesData.length === 0) return '0.00';
     return (salesData.reduce((sum, order) => sum + order.total, 0) / salesData.length).toFixed(2);
+  };
+
+  // Get client name by ID
+  const getClientName = (clientId?: string) => {
+    if (!clientId) return 'N/A';
+    const client = clients.find(c => c.id === clientId);
+    return client ? client.name : 'Unknown';
   };
   
   return (
@@ -272,14 +331,92 @@ const SalesReports: React.FC = () => {
       
       {/* Report Filters */}
       <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm">
-        <h2 className="text-base sm:text-lg font-semibold mb-4">Report Filters</h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-base sm:text-lg font-semibold">Report Filters</h2>
+          
+          {hasActiveFilters() && (
+            <button
+              onClick={clearFilters}
+              className="text-sm text-indigo-600 hover:text-indigo-900"
+            >
+              Clear All Filters
+            </button>
+          )}
+        </div>
+        
+        {/* Active Filters */}
+        {hasActiveFilters() && (
+          <div className="flex flex-wrap gap-2 mb-4">
+            {selectedPaymentMethod && (
+              <FilterTag
+                label="Payment Method"
+                value={paymentMethods.find(m => m.id === selectedPaymentMethod)?.name}
+                onRemove={() => setSelectedPaymentMethod('')}
+                color="indigo"
+              />
+            )}
+            
+            {selectedStatus && (
+              <FilterTag
+                label="Status"
+                value={orderStatuses.find(s => s.id === selectedStatus)?.name}
+                onRemove={() => setSelectedStatus('')}
+                color="blue"
+              />
+            )}
+            
+            {selectedSource && (
+              <FilterTag
+                label="Source"
+                value={orderSources.find(s => s.id === selectedSource)?.name}
+                onRemove={() => setSelectedSource('')}
+                color="purple"
+              />
+            )}
+            
+            {minTotal && (
+              <FilterTag
+                label="Min Total"
+                value={`${minTotal} RON`}
+                onRemove={() => setMinTotal('')}
+                color="green"
+              />
+            )}
+            
+            {maxTotal && (
+              <FilterTag
+                label="Max Total"
+                value={`${maxTotal} RON`}
+                onRemove={() => setMaxTotal('')}
+                color="red"
+              />
+            )}
+            
+            {selectedClient && (
+              <FilterTag
+                label="Client"
+                value={getClientName(selectedClient)}
+                onRemove={() => setSelectedClient('')}
+                color="amber"
+              />
+            )}
+          </div>
+        )}
         
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
           <div>
-            <label htmlFor="startDate" className="block text-sm font-medium text-gray-700 mb-1">
-              <Calendar className="inline h-4 w-4 mr-1 text-gray-500" />
-              Start Date
-            </label>
+            <div className="flex items-center mb-1">
+              <label htmlFor="startDate" className="block text-sm font-medium text-gray-700">
+                <Calendar className="inline h-4 w-4 mr-1 text-gray-500" />
+                Start Date
+              </label>
+              <div className="ml-1">
+                <ReportTooltip
+                  content="The beginning date for the report period"
+                  position="top"
+                />
+              </div>
+            </div>
             <input
               type="date"
               id="startDate"
@@ -290,10 +427,18 @@ const SalesReports: React.FC = () => {
           </div>
           
           <div>
-            <label htmlFor="endDate" className="block text-sm font-medium text-gray-700 mb-1">
-              <Calendar className="inline h-4 w-4 mr-1 text-gray-500" />
-              End Date
-            </label>
+            <div className="flex items-center mb-1">
+              <label htmlFor="endDate" className="block text-sm font-medium text-gray-700">
+                <Calendar className="inline h-4 w-4 mr-1 text-gray-500" />
+                End Date
+              </label>
+              <div className="ml-1">
+                <ReportTooltip
+                  content="The ending date for the report period"
+                  position="top"
+                />
+              </div>
+            </div>
             <input
               type="date"
               id="endDate"
@@ -304,10 +449,18 @@ const SalesReports: React.FC = () => {
           </div>
           
           <div>
-            <label htmlFor="paymentMethod" className="block text-sm font-medium text-gray-700 mb-1">
-              <Filter className="inline h-4 w-4 mr-1 text-gray-500" />
-              Payment Method
-            </label>
+            <div className="flex items-center mb-1">
+              <label htmlFor="paymentMethod" className="block text-sm font-medium text-gray-700">
+                <Filter className="inline h-4 w-4 mr-1 text-gray-500" />
+                Payment Method
+              </label>
+              <div className="ml-1">
+                <ReportTooltip
+                  content="Filter orders by how they were paid"
+                  position="top"
+                />
+              </div>
+            </div>
             <select
               id="paymentMethod"
               value={selectedPaymentMethod}
@@ -322,10 +475,18 @@ const SalesReports: React.FC = () => {
           </div>
           
           <div>
-            <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
-              <Filter className="inline h-4 w-4 mr-1 text-gray-500" />
-              Order Status
-            </label>
+            <div className="flex items-center mb-1">
+              <label htmlFor="status" className="block text-sm font-medium text-gray-700">
+                <Filter className="inline h-4 w-4 mr-1 text-gray-500" />
+                Order Status
+              </label>
+              <div className="ml-1">
+                <ReportTooltip
+                  content="Filter orders by their current status"
+                  position="top"
+                />
+              </div>
+            </div>
             <select
               id="status"
               value={selectedStatus}
@@ -340,10 +501,18 @@ const SalesReports: React.FC = () => {
           </div>
           
           <div>
-            <label htmlFor="source" className="block text-sm font-medium text-gray-700 mb-1">
-              <Filter className="inline h-4 w-4 mr-1 text-gray-500" />
-              Order Source
-            </label>
+            <div className="flex items-center mb-1">
+              <label htmlFor="source" className="block text-sm font-medium text-gray-700">
+                <Filter className="inline h-4 w-4 mr-1 text-gray-500" />
+                Order Source
+              </label>
+              <div className="ml-1">
+                <ReportTooltip
+                  content="Filter by where the order originated"
+                  position="top"
+                />
+              </div>
+            </div>
             <select
               id="source"
               value={selectedSource}
@@ -358,10 +527,44 @@ const SalesReports: React.FC = () => {
           </div>
           
           <div>
-            <label htmlFor="minTotal" className="block text-sm font-medium text-gray-700 mb-1">
-              <Filter className="inline h-4 w-4 mr-1 text-gray-500" />
-              Min Total (RON)
-            </label>
+            <div className="flex items-center mb-1">
+              <label htmlFor="client" className="block text-sm font-medium text-gray-700">
+                <Filter className="inline h-4 w-4 mr-1 text-gray-500" />
+                Client
+              </label>
+              <div className="ml-1">
+                <ReportTooltip
+                  content="Filter orders by specific client"
+                  position="top"
+                />
+              </div>
+            </div>
+            <select
+              id="client"
+              value={selectedClient}
+              onChange={(e) => setSelectedClient(e.target.value)}
+              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            >
+              <option value="">All Clients</option>
+              {clients.map(client => (
+                <option key={client.id} value={client.id}>{client.name}</option>
+              ))}
+            </select>
+          </div>
+          
+          <div>
+            <div className="flex items-center mb-1">
+              <label htmlFor="minTotal" className="block text-sm font-medium text-gray-700">
+                <Filter className="inline h-4 w-4 mr-1 text-gray-500" />
+                Min Total (RON)
+              </label>
+              <div className="ml-1">
+                <ReportTooltip
+                  content="Show only orders with total at or above this value"
+                  position="top"
+                />
+              </div>
+            </div>
             <input
               type="number"
               id="minTotal"
@@ -374,10 +577,18 @@ const SalesReports: React.FC = () => {
           </div>
           
           <div>
-            <label htmlFor="maxTotal" className="block text-sm font-medium text-gray-700 mb-1">
-              <Filter className="inline h-4 w-4 mr-1 text-gray-500" />
-              Max Total (RON)
-            </label>
+            <div className="flex items-center mb-1">
+              <label htmlFor="maxTotal" className="block text-sm font-medium text-gray-700">
+                <Filter className="inline h-4 w-4 mr-1 text-gray-500" />
+                Max Total (RON)
+              </label>
+              <div className="ml-1">
+                <ReportTooltip
+                  content="Show only orders with total at or below this value"
+                  position="top"
+                />
+              </div>
+            </div>
             <input
               type="number"
               id="maxTotal"
@@ -404,6 +615,7 @@ const SalesReports: React.FC = () => {
                 onClick={() => setSelectedExportFormat(format.id as any)}
               >
                 <div className="text-xs font-medium">{format.name}</div>
+                <div className="text-xs text-gray-500 mt-1">{format.description}</div>
               </div>
             ))}
           </div>

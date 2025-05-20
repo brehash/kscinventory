@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   BarChart2, 
   TrendingUp, 
@@ -8,17 +8,23 @@ import {
   Loader2,
   RefreshCw,
   AlertTriangle,
-  Users
+  Users,
+  Download,
+  ShoppingBag
 } from 'lucide-react';
 import { collection, getDocs, query, where, orderBy, limit, Timestamp } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { Product, Order, LowStockAlert } from '../../types';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
+import { useAuth } from '../auth/AuthProvider';
+import { exportDashboardAsPDF, domToImage } from '../../utils/reportUtils';
+import ReportCard from './ReportCard';
 
 /**
  * Reports Dashboard component to display key metrics and reports in a visual dashboard
  */
 const ReportsDashboard: React.FC = () => {
+  const { currentUser } = useAuth();
   // State for date range
   const [startDate, setStartDate] = useState<string>(
     new Date(new Date().getFullYear(), new Date().getMonth(), 1)
@@ -31,6 +37,7 @@ const ReportsDashboard: React.FC = () => {
   
   // State for data loading
   const [loading, setLoading] = useState<boolean>(true);
+  const [exporting, setExporting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   
   // State for dashboard metrics
@@ -44,7 +51,13 @@ const ReportsDashboard: React.FC = () => {
   // State for chart data
   const [salesByDayData, setSalesByDayData] = useState<any[]>([]);
   const [productCategoryData, setProductCategoryData] = useState<any[]>([]);
+  const [salesTrendData, setSalesTrendData] = useState<any[]>([]);
   
+  // Refs for chart DOM elements (for PDF export)
+  const salesChartRef = useRef<HTMLDivElement>(null);
+  const categoryChartRef = useRef<HTMLDivElement>(null);
+  const trendChartRef = useRef<HTMLDivElement>(null);
+
   // Fetch dashboard data
   useEffect(() => {
     fetchDashboardData();
@@ -116,6 +129,8 @@ const ReportsDashboard: React.FC = () => {
       
       const ordersQuery = query(
         ordersRef,
+        where('orderDate', '>=', Timestamp.fromDate(startDateObj)),
+        where('orderDate', '<=', Timestamp.fromDate(endDateObj)),
         orderBy('orderDate', 'desc')
       );
       
@@ -160,6 +175,58 @@ const ReportsDashboard: React.FC = () => {
       
       setSalesByDayData(chartData);
       
+      // Generate sales trend data (monthly)
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const salesByMonth = new Map<string, {revenue: number, count: number}>();
+      
+      // Initialize with last 6 months
+      for (let i = 5; i >= 0; i--) {
+        const date = new Date();
+        date.setMonth(date.getMonth() - i);
+        const monthKey = `${months[date.getMonth()]} ${date.getFullYear()}`;
+        salesByMonth.set(monthKey, {revenue: 0, count: 0});
+      }
+      
+      // Get all orders from the last 6 months
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+      sixMonthsAgo.setHours(0, 0, 0, 0);
+      
+      const trendQuery = query(
+        ordersRef,
+        where('orderDate', '>=', Timestamp.fromDate(sixMonthsAgo)),
+        orderBy('orderDate', 'asc')
+      );
+      
+      const trendSnapshot = await getDocs(trendQuery);
+      const trendOrders = trendSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        orderDate: doc.data().orderDate?.toDate() || new Date(),
+      })) as Order[];
+      
+      // Fill in monthly data
+      trendOrders.forEach(order => {
+        const orderDate = order.orderDate;
+        const monthKey = `${months[orderDate.getMonth()]} ${orderDate.getFullYear()}`;
+        
+        if (salesByMonth.has(monthKey)) {
+          const data = salesByMonth.get(monthKey)!;
+          data.revenue += order.total;
+          data.count += 1;
+          salesByMonth.set(monthKey, data);
+        }
+      });
+      
+      // Convert to array for chart
+      const trendData = Array.from(salesByMonth.entries()).map(([month, data]) => ({
+        month,
+        revenue: data.revenue,
+        count: data.count
+      }));
+      
+      setSalesTrendData(trendData);
+      
       // Fetch client count
       const clientsRef = collection(db, 'clients');
       const clientsSnapshot = await getDocs(clientsRef);
@@ -174,9 +241,55 @@ const ReportsDashboard: React.FC = () => {
   };
   
   // Export dashboard as PDF
-  const exportDashboard = () => {
-    // This would be implemented to export the dashboard as PDF
-    console.log('Exporting dashboard as PDF...');
+  const exportDashboard = async () => {
+    if (!currentUser) return;
+    
+    try {
+      setExporting(true);
+      
+      // Capture chart images
+      const chartImages: string[] = [];
+      
+      if (salesChartRef.current) {
+        const salesChartImage = await domToImage(salesChartRef.current);
+        chartImages.push(salesChartImage);
+      }
+      
+      if (categoryChartRef.current) {
+        const categoryChartImage = await domToImage(categoryChartRef.current);
+        chartImages.push(categoryChartImage);
+      }
+      
+      if (trendChartRef.current) {
+        const trendChartImage = await domToImage(trendChartRef.current);
+        chartImages.push(trendChartImage);
+      }
+      
+      // Prepare dashboard data
+      const dashboardData = {
+        title: "Inventory Management System Dashboard",
+        subtitle: `Report Period: ${startDate} to ${endDate}`,
+        date: new Date().toLocaleString(),
+        stats: {
+          totalProducts,
+          totalValue,
+          lowStockCount,
+          totalSales,
+          totalOrders,
+          totalClients
+        },
+        chartImages
+      };
+      
+      // Generate and download the PDF
+      await exportDashboardAsPDF(dashboardData, currentUser);
+      
+    } catch (error) {
+      console.error('Error exporting dashboard:', error);
+      setError('Failed to export dashboard. Please try again.');
+    } finally {
+      setExporting(false);
+    }
   };
   
   // COLORS for pie chart
@@ -217,10 +330,10 @@ const ReportsDashboard: React.FC = () => {
           <p className="text-sm sm:text-base text-gray-600">Overview of key metrics and performance indicators</p>
         </div>
         
-        <div className="flex items-center mt-3 sm:mt-0">
+        <div className="flex items-center mt-3 sm:mt-0 space-x-2">
           <button
             onClick={fetchDashboardData}
-            className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 mr-3"
+            className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
           >
             <RefreshCw className="h-4 w-4 mr-1.5" />
             Refresh
@@ -228,10 +341,20 @@ const ReportsDashboard: React.FC = () => {
           
           <button
             onClick={exportDashboard}
-            className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            disabled={exporting}
+            className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
           >
-            <TrendingUp className="h-4 w-4 mr-1.5" />
-            Export Dashboard
+            {exporting ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                Exporting...
+              </>
+            ) : (
+              <>
+                <Download className="h-4 w-4 mr-1.5" />
+                Export to PDF
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -239,64 +362,64 @@ const ReportsDashboard: React.FC = () => {
       {/* Key Metric Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         {/* Total Products */}
-        <div className="bg-white p-4 rounded-lg shadow-sm flex flex-col">
-          <div className="flex items-center text-indigo-500 mb-2">
-            <Package className="h-5 w-5" />
-          </div>
-          <div className="text-xs font-medium text-gray-500">Total Products</div>
-          <div className="text-xl sm:text-2xl font-bold text-gray-800 mt-1">{totalProducts}</div>
-        </div>
+        <ReportCard
+          title="Total Products"
+          value={totalProducts}
+          icon={<Package className="h-5 w-5" />}
+          color="indigo"
+          tooltip="The total number of unique product items in your inventory system"
+        />
         
         {/* Inventory Value */}
-        <div className="bg-white p-4 rounded-lg shadow-sm flex flex-col">
-          <div className="flex items-center text-green-500 mb-2">
-            <DollarSign className="h-5 w-5" />
-          </div>
-          <div className="text-xs font-medium text-gray-500">Inventory Value</div>
-          <div className="text-xl sm:text-2xl font-bold text-gray-800 mt-1">{totalValue.toLocaleString()} RON</div>
-        </div>
+        <ReportCard
+          title="Inventory Value"
+          value={`${totalValue.toLocaleString()} RON`}
+          icon={<DollarSign className="h-5 w-5" />}
+          color="green"
+          tooltip="The total cost value of all items currently in your inventory, calculated using cost price"
+        />
         
         {/* Low Stock Items */}
-        <div className="bg-white p-4 rounded-lg shadow-sm flex flex-col">
-          <div className="flex items-center text-amber-500 mb-2">
-            <AlertTriangle className="h-5 w-5" />
-          </div>
-          <div className="text-xs font-medium text-gray-500">Low Stock Items</div>
-          <div className="text-xl sm:text-2xl font-bold text-gray-800 mt-1">{lowStockCount}</div>
-        </div>
+        <ReportCard
+          title="Low Stock Items"
+          value={lowStockCount}
+          icon={<AlertTriangle className="h-5 w-5" />}
+          color="yellow"
+          tooltip="The number of products with quantity at or below their minimum stock threshold, requiring attention"
+        />
         
         {/* Total Sales */}
-        <div className="bg-white p-4 rounded-lg shadow-sm flex flex-col">
-          <div className="flex items-center text-purple-500 mb-2">
-            <DollarSign className="h-5 w-5" />
-          </div>
-          <div className="text-xs font-medium text-gray-500">Total Sales</div>
-          <div className="text-xl sm:text-2xl font-bold text-gray-800 mt-1">{totalSales.toLocaleString()} RON</div>
-        </div>
+        <ReportCard
+          title="Total Sales"
+          value={`${totalSales.toLocaleString()} RON`}
+          icon={<DollarSign className="h-5 w-5" />}
+          color="purple"
+          tooltip="Total revenue from all orders within the selected date range"
+        />
         
         {/* Total Orders */}
-        <div className="bg-white p-4 rounded-lg shadow-sm flex flex-col">
-          <div className="flex items-center text-blue-500 mb-2">
-            <BarChart2 className="h-5 w-5" />
-          </div>
-          <div className="text-xs font-medium text-gray-500">Total Orders</div>
-          <div className="text-xl sm:text-2xl font-bold text-gray-800 mt-1">{totalOrders}</div>
-        </div>
+        <ReportCard
+          title="Total Orders"
+          value={totalOrders}
+          icon={<ShoppingBag className="h-5 w-5" />}
+          color="blue"
+          tooltip="The number of orders processed within the selected date range"
+        />
         
         {/* Total Clients */}
-        <div className="bg-white p-4 rounded-lg shadow-sm flex flex-col">
-          <div className="flex items-center text-teal-500 mb-2">
-            <Users className="h-5 w-5" />
-          </div>
-          <div className="text-xs font-medium text-gray-500">Total Clients</div>
-          <div className="text-xl sm:text-2xl font-bold text-gray-800 mt-1">{totalClients}</div>
-        </div>
+        <ReportCard
+          title="Total Clients"
+          value={totalClients}
+          icon={<Users className="h-5 w-5" />}
+          color="teal"
+          tooltip="Total number of clients in your CRM system"
+        />
       </div>
       
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Sales Over Time Chart */}
-        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm">
+        <div ref={salesChartRef} className="bg-white p-4 sm:p-6 rounded-lg shadow-sm">
           <h2 className="text-base font-semibold mb-4">Sales Last 7 Days</h2>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
@@ -312,7 +435,7 @@ const ReportsDashboard: React.FC = () => {
         </div>
         
         {/* Product Categories Chart */}
-        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm">
+        <div ref={categoryChartRef} className="bg-white p-4 sm:p-6 rounded-lg shadow-sm">
           <h2 className="text-base font-semibold mb-4">Products by Category</h2>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
@@ -333,6 +456,24 @@ const ReportsDashboard: React.FC = () => {
                 </Pie>
                 <Tooltip formatter={(value) => [`${value} products`, 'Count']} />
               </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+        
+        {/* Monthly Sales Trend */}
+        <div ref={trendChartRef} className="lg:col-span-2 bg-white p-4 sm:p-6 rounded-lg shadow-sm">
+          <h2 className="text-base font-semibold mb-4">Monthly Sales Trend</h2>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={salesTrendData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" />
+                <YAxis yAxisId="left" orientation="left" stroke="#4f46e5" />
+                <YAxis yAxisId="right" orientation="right" stroke="#10b981" />
+                <Tooltip />
+                <Line yAxisId="left" type="monotone" dataKey="revenue" stroke="#4f46e5" name="Revenue (RON)" />
+                <Line yAxisId="right" type="monotone" dataKey="count" stroke="#10b981" name="Order Count" />
+              </LineChart>
             </ResponsiveContainer>
           </div>
         </div>

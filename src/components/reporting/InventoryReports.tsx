@@ -5,6 +5,8 @@ import { db } from '../../config/firebase';
 import { Product, ProductCategory, Location, ProductType, Provider } from '../../types';
 import { exportProducts } from '../../utils/reportUtils';
 import { useAuth } from '../auth/AuthProvider';
+import ReportTooltip from './ReportTooltip';
+import FilterTag from './FilterTag';
 
 /**
  * Inventory Reports component to generate and display various inventory-related reports
@@ -182,6 +184,10 @@ const InventoryReports: React.FC = () => {
         {
           categoryId: selectedCategory || undefined,
           locationId: selectedLocation || undefined,
+          providerId: selectedProvider || undefined,
+          typeId: selectedProductType || undefined,
+          minQuantity: minQuantity ? parseInt(minQuantity) : undefined,
+          maxQuantity: maxQuantity ? parseInt(maxQuantity) : undefined,
           startDate,
           endDate
         },
@@ -200,6 +206,15 @@ const InventoryReports: React.FC = () => {
     } finally {
       setExporting(false);
     }
+  };
+  
+  const clearFilters = () => {
+    setSelectedCategory('');
+    setSelectedLocation('');
+    setSelectedProductType('');
+    setSelectedProvider('');
+    setMinQuantity('');
+    setMaxQuantity('');
   };
   
   // Report type options
@@ -241,6 +256,16 @@ const InventoryReports: React.FC = () => {
     if (!providerId) return 'None';
     const provider = providers.find(p => p.id === providerId);
     return provider ? provider.name : 'Unknown';
+  };
+  
+  // Check if any filter is active
+  const hasActiveFilters = () => {
+    return selectedCategory !== '' || 
+           selectedLocation !== '' || 
+           selectedProductType !== '' || 
+           selectedProvider !== '' || 
+           minQuantity !== '' || 
+           maxQuantity !== '';
   };
   
   return (
@@ -307,7 +332,77 @@ const InventoryReports: React.FC = () => {
       
       {/* Report Filters */}
       <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm">
-        <h2 className="text-base sm:text-lg font-semibold mb-4">Report Filters</h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-base sm:text-lg font-semibold">Report Filters</h2>
+          
+          {hasActiveFilters() && (
+            <button
+              onClick={clearFilters}
+              className="text-sm text-indigo-600 hover:text-indigo-900"
+            >
+              Clear All Filters
+            </button>
+          )}
+        </div>
+        
+        {/* Active Filters */}
+        {hasActiveFilters() && (
+          <div className="flex flex-wrap gap-2 mb-4">
+            {selectedCategory && (
+              <FilterTag
+                label="Category"
+                value={getCategoryName(selectedCategory)}
+                onRemove={() => setSelectedCategory('')}
+                color="blue"
+              />
+            )}
+            
+            {selectedLocation && (
+              <FilterTag
+                label="Location"
+                value={getLocationName(selectedLocation)}
+                onRemove={() => setSelectedLocation('')}
+                color="green"
+              />
+            )}
+            
+            {selectedProductType && (
+              <FilterTag
+                label="Product Type"
+                value={getProductTypeName(selectedProductType)}
+                onRemove={() => setSelectedProductType('')}
+                color="purple"
+              />
+            )}
+            
+            {selectedProvider && (
+              <FilterTag
+                label="Provider"
+                value={getProviderName(selectedProvider)}
+                onRemove={() => setSelectedProvider('')}
+                color="amber"
+              />
+            )}
+            
+            {minQuantity && (
+              <FilterTag
+                label="Min Quantity"
+                value={minQuantity}
+                onRemove={() => setMinQuantity('')}
+                color="indigo"
+              />
+            )}
+            
+            {maxQuantity && (
+              <FilterTag
+                label="Max Quantity"
+                value={maxQuantity}
+                onRemove={() => setMaxQuantity('')}
+                color="red"
+              />
+            )}
+          </div>
+        )}
         
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <div>
@@ -339,10 +434,18 @@ const InventoryReports: React.FC = () => {
           </div>
           
           <div>
-            <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-1">
-              <Filter className="inline h-4 w-4 mr-1 text-gray-500" />
-              Category
-            </label>
+            <div className="flex items-center mb-1">
+              <label htmlFor="category" className="block text-sm font-medium text-gray-700">
+                <Filter className="inline h-4 w-4 mr-1 text-gray-500" />
+                Category
+              </label>
+              <div className="ml-1">
+                <ReportTooltip
+                  content="Filter products by their assigned category"
+                  position="top"
+                />
+              </div>
+            </div>
             <select
               id="category"
               value={selectedCategory}
@@ -357,10 +460,18 @@ const InventoryReports: React.FC = () => {
           </div>
           
           <div>
-            <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-1">
-              <Filter className="inline h-4 w-4 mr-1 text-gray-500" />
-              Location
-            </label>
+            <div className="flex items-center mb-1">
+              <label htmlFor="location" className="block text-sm font-medium text-gray-700">
+                <Filter className="inline h-4 w-4 mr-1 text-gray-500" />
+                Location
+              </label>
+              <div className="ml-1">
+                <ReportTooltip
+                  content="Filter products by their storage location"
+                  position="top"
+                />
+              </div>
+            </div>
             <select
               id="location"
               value={selectedLocation}
@@ -375,10 +486,18 @@ const InventoryReports: React.FC = () => {
           </div>
           
           <div>
-            <label htmlFor="productType" className="block text-sm font-medium text-gray-700 mb-1">
-              <Filter className="inline h-4 w-4 mr-1 text-gray-500" />
-              Product Type
-            </label>
+            <div className="flex items-center mb-1">
+              <label htmlFor="productType" className="block text-sm font-medium text-gray-700">
+                <Filter className="inline h-4 w-4 mr-1 text-gray-500" />
+                Product Type
+              </label>
+              <div className="ml-1">
+                <ReportTooltip
+                  content="Filter products by their type classification"
+                  position="top"
+                />
+              </div>
+            </div>
             <select
               id="productType"
               value={selectedProductType}
@@ -393,10 +512,18 @@ const InventoryReports: React.FC = () => {
           </div>
           
           <div>
-            <label htmlFor="provider" className="block text-sm font-medium text-gray-700 mb-1">
-              <Filter className="inline h-4 w-4 mr-1 text-gray-500" />
-              Provider
-            </label>
+            <div className="flex items-center mb-1">
+              <label htmlFor="provider" className="block text-sm font-medium text-gray-700">
+                <Filter className="inline h-4 w-4 mr-1 text-gray-500" />
+                Provider
+              </label>
+              <div className="ml-1">
+                <ReportTooltip
+                  content="Filter products by their supplier or vendor"
+                  position="top"
+                />
+              </div>
+            </div>
             <select
               id="provider"
               value={selectedProvider}
@@ -411,10 +538,18 @@ const InventoryReports: React.FC = () => {
           </div>
           
           <div>
-            <label htmlFor="minQuantity" className="block text-sm font-medium text-gray-700 mb-1">
-              <Filter className="inline h-4 w-4 mr-1 text-gray-500" />
-              Min Quantity
-            </label>
+            <div className="flex items-center mb-1">
+              <label htmlFor="minQuantity" className="block text-sm font-medium text-gray-700">
+                <Filter className="inline h-4 w-4 mr-1 text-gray-500" />
+                Min Quantity
+              </label>
+              <div className="ml-1">
+                <ReportTooltip
+                  content="Show only products with quantity at or above this value"
+                  position="top"
+                />
+              </div>
+            </div>
             <input
               type="number"
               id="minQuantity"
@@ -426,10 +561,18 @@ const InventoryReports: React.FC = () => {
           </div>
           
           <div>
-            <label htmlFor="maxQuantity" className="block text-sm font-medium text-gray-700 mb-1">
-              <Filter className="inline h-4 w-4 mr-1 text-gray-500" />
-              Max Quantity
-            </label>
+            <div className="flex items-center mb-1">
+              <label htmlFor="maxQuantity" className="block text-sm font-medium text-gray-700">
+                <Filter className="inline h-4 w-4 mr-1 text-gray-500" />
+                Max Quantity
+              </label>
+              <div className="ml-1">
+                <ReportTooltip
+                  content="Show only products with quantity at or below this value"
+                  position="top"
+                />
+              </div>
+            </div>
             <input
               type="number"
               id="maxQuantity"

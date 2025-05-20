@@ -188,6 +188,10 @@ export const exportProducts = async (
   filters: {
     categoryId?: string;
     locationId?: string;
+    providerId?: string;
+    typeId?: string;
+    minQuantity?: number;
+    maxQuantity?: number;
     startDate?: string;
     endDate?: string;
   } = {},
@@ -207,20 +211,48 @@ export const exportProducts = async (
       q = query(q, where('locationId', '==', filters.locationId));
     }
     
-    // Note: We're not using date filters here as products may not have a specific date field
-    // to filter on. This would be more applicable for orders, activities, etc.
+    if (filters.providerId) {
+      q = query(q, where('providerId', '==', filters.providerId));
+    }
+    
+    if (filters.typeId) {
+      q = query(q, where('typeId', '==', filters.typeId));
+    }
     
     const querySnapshot = await getDocs(q);
-    const products = querySnapshot.docs.map(doc => {
+    
+    // Get reference data for better export formatting
+    const categoriesSnapshot = await getDocs(collection(db, 'categories'));
+    const categories = new Map<string, string>();
+    categoriesSnapshot.docs.forEach(doc => categories.set(doc.id, doc.data().name));
+    
+    const locationsSnapshot = await getDocs(collection(db, 'locations'));
+    const locations = new Map<string, string>();
+    locationsSnapshot.docs.forEach(doc => locations.set(doc.id, doc.data().name));
+    
+    const productTypesSnapshot = await getDocs(collection(db, 'productTypes'));
+    const productTypes = new Map<string, string>();
+    productTypesSnapshot.docs.forEach(doc => productTypes.set(doc.id, doc.data().name));
+    
+    const providersSnapshot = await getDocs(collection(db, 'providers'));
+    const providers = new Map<string, string>();
+    providersSnapshot.docs.forEach(doc => providers.set(doc.id, doc.data().name));
+    
+    // Process products with filters and transformations
+    let products = querySnapshot.docs.map(doc => {
       const data = doc.data();
       // Clean up data for export - flatten and convert dates to strings
       return {
         id: doc.id,
         name: data.name,
         barcode: data.barcode || '',
+        category: categories.get(data.categoryId) || 'Unknown',
         category_id: data.categoryId,
+        type: productTypes.get(data.typeId) || 'Unknown',
         type_id: data.typeId,
+        location: locations.get(data.locationId) || 'Unknown',
         location_id: data.locationId,
+        provider: data.providerId ? (providers.get(data.providerId) || 'Unknown') : '',
         provider_id: data.providerId || '',
         quantity: data.quantity,
         min_quantity: data.minQuantity,
@@ -233,6 +265,15 @@ export const exportProducts = async (
         updated_at: data.updatedAt?.toDate().toISOString() || ''
       };
     });
+    
+    // Apply additional client-side filters
+    if (filters.minQuantity !== undefined) {
+      products = products.filter(product => product.quantity >= filters.minQuantity!);
+    }
+    
+    if (filters.maxQuantity !== undefined) {
+      products = products.filter(product => product.quantity <= filters.maxQuantity!);
+    }
     
     // Log the export activity
     await logActivity(
@@ -269,6 +310,10 @@ export const exportOrders = async (
   filters: {
     status?: string;
     paymentMethod?: string;
+    source?: string;
+    minTotal?: number;
+    maxTotal?: number;
+    clientId?: string;
     startDate?: string;
     endDate?: string;
   } = {},
@@ -288,6 +333,14 @@ export const exportOrders = async (
       q = query(q, where('paymentMethod', '==', filters.paymentMethod));
     }
     
+    if (filters.source) {
+      q = query(q, where('source', '==', filters.source));
+    }
+    
+    if (filters.clientId) {
+      q = query(q, where('clientId', '==', filters.clientId));
+    }
+    
     if (filters.startDate) {
       const startDate = new Date(filters.startDate);
       startDate.setHours(0, 0, 0, 0);
@@ -303,7 +356,9 @@ export const exportOrders = async (
     q = query(q, orderBy('orderDate', 'desc'));
     
     const querySnapshot = await getDocs(q);
-    const orders = querySnapshot.docs.map(doc => {
+    
+    // Transform orders for export
+    let orders = querySnapshot.docs.map(doc => {
       const data = doc.data();
       // Clean up data for export - flatten and convert dates to strings
       return {
@@ -320,12 +375,23 @@ export const exportOrders = async (
         payment_method: data.paymentMethod,
         source: data.source,
         items_count: data.items?.length || 0,
+        shipping_address: `${data.shippingAddress?.address1 || ''}, ${data.shippingAddress?.city || ''}, ${data.shippingAddress?.country || ''}`,
+        billing_address: `${data.billingAddress?.address1 || ''}, ${data.billingAddress?.city || ''}, ${data.billingAddress?.country || ''}`,
         created_at: data.createdAt?.toDate().toISOString() || '',
         updated_at: data.updatedAt?.toDate().toISOString() || '',
         fulfilled_at: data.fulfilledAt?.toDate().toISOString() || '',
         fulfilled_by: data.fulfilledBy || ''
       };
     });
+    
+    // Apply additional client-side filters
+    if (filters.minTotal !== undefined) {
+      orders = orders.filter(order => order.total >= filters.minTotal!);
+    }
+    
+    if (filters.maxTotal !== undefined) {
+      orders = orders.filter(order => order.total <= filters.maxTotal!);
+    }
     
     // Log the export activity
     await logActivity(
@@ -361,6 +427,9 @@ export const exportClients = async (
   includeHeaders: boolean = true,
   filters: {
     isActive?: boolean;
+    minTotalOrders?: number;
+    minTotalSpent?: number;
+    tags?: string[];
     startDate?: string;
     endDate?: string;
   } = {},
@@ -377,10 +446,36 @@ export const exportClients = async (
     }
     
     // Date filters would apply to createdAt or lastOrderDate depending on requirements
+    if (filters.startDate && filters.endDate) {
+      // Example: filter by createdAt date
+      const startDate = new Date(filters.startDate);
+      startDate.setHours(0, 0, 0, 0);
+      
+      const endDate = new Date(filters.endDate);
+      endDate.setHours(23, 59, 59, 999);
+      
+      q = query(q, where('createdAt', '>=', Timestamp.fromDate(startDate)));
+      q = query(q, where('createdAt', '<=', Timestamp.fromDate(endDate)));
+    }
     
     const querySnapshot = await getDocs(q);
-    const clients = querySnapshot.docs.map(doc => {
+    
+    // Process clients with additional filters
+    let clients = querySnapshot.docs.map(doc => {
       const data = doc.data();
+      
+      // Format address for display
+      let formattedAddress = '';
+      if (data.address) {
+        const addr = data.address;
+        formattedAddress = [
+          addr.address1,
+          addr.address2,
+          `${addr.city}, ${addr.state} ${addr.postcode}`,
+          addr.country
+        ].filter(Boolean).join(', ');
+      }
+      
       // Clean up data for export - flatten and convert dates to strings
       return {
         id: doc.id,
@@ -391,16 +486,35 @@ export const exportClients = async (
         tax_id: data.taxId || '',
         contact_person: data.contactPerson || '',
         contact_role: data.contactRole || '',
+        address: formattedAddress,
         website: data.website || '',
+        tags: (data.tags || []).join(', '),
         is_active: data.isActive ? 'Yes' : 'No',
         total_orders: data.totalOrders || 0,
         total_spent: data.totalSpent || 0,
         average_order_value: data.averageOrderValue || 0,
         last_order_date: data.lastOrderDate?.toDate().toISOString() || '',
         created_at: data.createdAt?.toDate().toISOString() || '',
-        updated_at: data.updatedAt?.toDate().toISOString() || ''
+        updated_at: data.updatedAt?.toDate().toISOString() || '',
+        source: data.source || 'manual'
       };
     });
+    
+    // Apply additional client-side filters
+    if (filters.minTotalOrders !== undefined) {
+      clients = clients.filter(client => client.total_orders >= filters.minTotalOrders!);
+    }
+    
+    if (filters.minTotalSpent !== undefined) {
+      clients = clients.filter(client => client.total_spent >= filters.minTotalSpent!);
+    }
+    
+    if (filters.tags && filters.tags.length > 0) {
+      clients = clients.filter(client => {
+        const clientTags = client.tags.split(', ');
+        return filters.tags!.every(tag => clientTags.includes(tag));
+      });
+    }
     
     // Log the export activity
     await logActivity(
@@ -681,4 +795,161 @@ export const exportCustom = async (
     console.error('Error generating custom export:', error);
     return Promise.reject(error);
   }
+};
+
+/**
+ * Export dashboard as PDF with charts
+ * @param dashboardData The dashboard data including charts
+ * @param currentUser The current user
+ * @returns Promise that resolves when the export is complete
+ */
+export const exportDashboardAsPDF = async (
+  dashboardData: {
+    title: string;
+    subtitle?: string;
+    date: string;
+    stats: {
+      totalProducts: number;
+      totalValue: number;
+      lowStockCount: number;
+      totalSales: number;
+      totalOrders: number;
+      totalClients: number;
+    },
+    chartImages?: string[]
+  },
+  currentUser: User
+): Promise<void> => {
+  try {
+    const doc = new jsPDF();
+    let yPos = 15;
+    const marginLeft = 14;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    
+    // Add title
+    doc.setFontSize(18);
+    doc.setTextColor(79, 70, 229); // indigo-600
+    doc.text(dashboardData.title, marginLeft, yPos);
+    yPos += 10;
+    
+    // Add subtitle if provided
+    if (dashboardData.subtitle) {
+      doc.setFontSize(12);
+      doc.setTextColor(107, 114, 128); // gray-500
+      doc.text(dashboardData.subtitle, marginLeft, yPos);
+      yPos += 10;
+    }
+    
+    // Add date
+    doc.setFontSize(10);
+    doc.setTextColor(107, 114, 128); // gray-500
+    doc.text(`Generated: ${dashboardData.date}`, marginLeft, yPos);
+    yPos += 15;
+    
+    // Add stats section
+    doc.setFontSize(14);
+    doc.setTextColor(31, 41, 55); // gray-800
+    doc.text("Key Metrics", marginLeft, yPos);
+    yPos += 8;
+    
+    const stats = [
+      { label: "Total Products", value: dashboardData.stats.totalProducts.toString() },
+      { label: "Inventory Value", value: `${dashboardData.stats.totalValue.toLocaleString()} RON` },
+      { label: "Low Stock Items", value: dashboardData.stats.lowStockCount.toString() },
+      { label: "Total Sales", value: `${dashboardData.stats.totalSales.toLocaleString()} RON` },
+      { label: "Total Orders", value: dashboardData.stats.totalOrders.toString() },
+      { label: "Total Clients", value: dashboardData.stats.totalClients.toString() }
+    ];
+    
+    // Create a stats table
+    const statsData = stats.map(stat => [stat.label, stat.value]);
+    
+    (doc as any).autoTable({
+      startY: yPos,
+      head: [["Metric", "Value"]],
+      body: statsData,
+      theme: 'grid',
+      headStyles: { fillColor: [79, 70, 229] },
+      margin: { left: marginLeft }
+    });
+    
+    yPos = (doc as any).lastAutoTable.finalY + 15;
+    
+    // Add charts if provided
+    if (dashboardData.chartImages && dashboardData.chartImages.length > 0) {
+      doc.setFontSize(14);
+      doc.setTextColor(31, 41, 55); // gray-800
+      doc.text("Charts & Graphs", marginLeft, yPos);
+      yPos += 10;
+      
+      // Add each chart image
+      for (let i = 0; i < dashboardData.chartImages.length; i++) {
+        const chartImage = dashboardData.chartImages[i];
+        
+        // Check if we need to add a new page
+        if (yPos > 250) {
+          doc.addPage();
+          yPos = 20;
+        }
+        
+        try {
+          // Add the chart image
+          const imgWidth = pageWidth - (marginLeft * 2);
+          const imgHeight = 80;
+          doc.addImage(chartImage, 'PNG', marginLeft, yPos, imgWidth, imgHeight);
+          yPos += imgHeight + 15;
+        } catch (err) {
+          console.error(`Error adding chart image ${i}:`, err);
+        }
+      }
+    }
+    
+    // Add footer
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(156, 163, 175); // gray-400
+      doc.text(
+        `Inventory Management System - Page ${i} of ${pageCount}`,
+        pageWidth / 2,
+        doc.internal.pageSize.getHeight() - 10,
+        { align: 'center' }
+      );
+    }
+    
+    // Log the export activity
+    await logActivity(
+      'added',
+      'export', 
+      Date.now().toString(), // Using timestamp as ID
+      `Dashboard Export (PDF)`,
+      currentUser
+    );
+    
+    // Generate filename
+    const filename = generateFilename('dashboard_report', 'pdf');
+    
+    // Save the PDF
+    doc.save(filename);
+    
+    return Promise.resolve();
+  } catch (error) {
+    console.error('Error exporting dashboard as PDF:', error);
+    return Promise.reject(error);
+  }
+};
+
+// Utility for converting DOM elements to images for PDF export
+export const domToImage = async (element: HTMLElement): Promise<string> => {
+  // Using html2canvas dynamic import
+  const html2canvas = (await import('html2canvas')).default;
+  const canvas = await html2canvas(element, {
+    scale: 2, // Higher scale for better quality
+    logging: false,
+    useCORS: true,
+    allowTaint: true
+  });
+  
+  return canvas.toDataURL('image/png');
 };

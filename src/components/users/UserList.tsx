@@ -82,13 +82,20 @@ const UserList: React.FC = () => {
         // Only proceed if the functions object exists and is properly initialized
         if (functions) {
           const deleteUserAuth = httpsCallable(functions, 'deleteUser');
-          const result = await deleteUserAuth({ uid: userToDelete.uid });
           
-          // Check if the function returned a success result
-          if (result && result.data && (result.data as any).success) {
-            authDeletionSuccessful = true;
-          } else {
-            throw new Error('Cloud function did not return success status');
+          try {
+            const result = await deleteUserAuth({ uid: userToDelete.uid });
+            
+            // Check if the function returned a success result
+            if (result && result.data && (result.data as any).success) {
+              authDeletionSuccessful = true;
+            } else {
+              console.warn('Cloud function did not return success status:', result);
+              throw new Error((result.data as any).error || 'Cloud function did not return success status');
+            }
+          } catch (callError: any) {
+            console.error('Error calling Cloud Function:', callError);
+            throw new Error(`Error deleting auth user: ${callError.message || callError.details || 'Unknown Cloud Function error'}`);
           }
         } else {
           console.warn('Firebase Functions not available. Auth user not deleted.');
@@ -100,7 +107,7 @@ const UserList: React.FC = () => {
         // Don't stop the process - we've already deleted the user from Firestore
         // Just show a warning that the auth account might still exist
         setError(
-          `User document deleted, but there was an issue removing their authentication account. An administrator may need to remove their auth account manually.`
+          `User document deleted, but there was an issue removing their authentication account: ${authError.message || 'Internal error'}. An administrator may need to remove their auth account manually.`
         );
       }
       

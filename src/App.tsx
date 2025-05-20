@@ -37,6 +37,11 @@ import ClientCreate from './components/crm/ClientCreate';
 import ClientDetails from './components/crm/ClientDetails';
 import ClientEdit from './components/crm/ClientEdit';
 
+// Reporting Components
+import ReportingLayout from './components/reporting/ReportingLayout';
+import ReportingHome from './components/reporting/ReportingHome';
+import SAGAExport from './components/reporting/SAGAExport';
+
 function App() {
   return (
     <AuthProvider>
@@ -104,6 +109,25 @@ function App() {
             <Route path="crm/clients/new" element={<ClientCreate />} />
             <Route path="crm/clients/:id" element={<ClientDetails />} />
             <Route path="crm/clients/:id/edit" element={<ClientEdit />} />
+            
+            {/* Reporting Routes */}
+            <Route 
+              path="reporting" 
+              element={
+                <ProtectedRoute requiredRoles={['admin', 'manager']}>
+                  <ReportingLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<ReportingHome />} />
+              <Route path="saga-export" element={<SAGAExport />} />
+              {/* Placeholders for future reporting features */}
+              <Route path="inventory" element={<div className="p-4">Inventory Reports - Coming soon</div>} />
+              <Route path="sales" element={<div className="p-4">Sales Reports - Coming soon</div>} />
+              <Route path="custom" element={<div className="p-4">Custom Reports - Coming soon</div>} />
+              <Route path="export" element={<div className="p-4">Export Center - Coming soon</div>} />
+              <Route path="dashboard" element={<div className="p-4">Reports Dashboard - Coming soon</div>} />
+            </Route>
             
             {/* User Management Routes - Admin Only */}
             <Route 

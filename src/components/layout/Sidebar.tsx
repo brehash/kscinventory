@@ -15,7 +15,8 @@ import {
   Activity,
   UserCircle,
   AlertTriangle,
-  Building
+  Building,
+  FileText
 } from 'lucide-react';
 
 const Sidebar: React.FC = () => {
@@ -79,6 +80,12 @@ const Sidebar: React.FC = () => {
       name: 'CRM',
       icon: <Building className="h-5 w-5" />,
       roles: ['admin', 'manager', 'staff']
+    },
+    {
+      path: '/reporting',
+      name: 'Reporting',
+      icon: <FileText className="h-5 w-5" />,
+      roles: ['admin', 'manager']
     },
     { 
       path: '/settings', 

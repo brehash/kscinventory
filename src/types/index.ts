@@ -120,7 +120,7 @@ export interface LowStockAlert {
 
 // Activity Log Types
 export type ActivityType = 'added' | 'removed' | 'updated' | 'deleted' | 'moved';
-export type ActivityEntityType = 'product' | 'category' | 'location' | 'productType' | 'provider' | 'order' | 'user' | 'client' | 'note';
+export type ActivityEntityType = 'product' | 'category' | 'location' | 'productType' | 'provider' | 'order' | 'user' | 'client' | 'note' | 'export';
 
 export interface ActivityLog {
   id: string;

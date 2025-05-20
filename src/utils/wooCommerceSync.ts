@@ -363,22 +363,39 @@ const updateClientOrderStats = async (clientId: string | null, orderTotal: numbe
     if (clientDoc.exists()) {
       const clientData = clientDoc.data() as Client;
       
+      // Get existing values
+      const existingTotalSpent = clientData.totalSpent || 0;
+      const existingAverageOrderValue = clientData.averageOrderValue || 0;
+      
       // Calculate new values
-      const totalOrders = clientData.totalOrders || 0;
-      const totalSpent = (clientData.totalSpent || 0) + orderTotal;
-      const averageOrderValue = totalOrders > 0 ? totalSpent / totalOrders : 0;
+      const totalOrders = clientData.totalOrders || 0; // Should already be incremented
+      const newTotalSpent = existingTotalSpent + orderTotal;
+      const newAverageOrderValue = totalOrders > 0 ? newTotalSpent / totalOrders : 0;
+      const newLastOrderDate = new Date();
       
-      // Set last order date to current date
-      const lastOrderDate = new Date();
+      // Create update object, only including fields that changed
+      const updates: Partial<Client> = {};
       
-      // Update client with order statistics
-      await updateDoc(clientRef, {
-        totalSpent,
-        averageOrderValue,
-        lastOrderDate
-      });
+      // Check if values changed and add to updates object if they did
+      if (newTotalSpent !== existingTotalSpent) {
+        updates.totalSpent = newTotalSpent;
+      }
       
-      // console.log(`Updated client ${clientId} order statistics: Total orders: ${totalOrders}, Total spent: ${totalSpent}, Avg order value: ${averageOrderValue}`);
+      if (Math.abs(newAverageOrderValue - existingAverageOrderValue) > 0.01) {
+        // Using a small epsilon for floating-point comparison
+        updates.averageOrderValue = newAverageOrderValue;
+      }
+      
+      // Always update last order date
+      updates.lastOrderDate = newLastOrderDate;
+      
+      // Only update if there are changes to make
+      if (Object.keys(updates).length > 0) {
+        await updateDoc(clientRef, updates);
+        console.log(`Updated client ${clientId} order statistics. Changes: ${Object.keys(updates).join(', ')}`);
+      } else {
+        console.log(`No changes needed for client ${clientId} order statistics`);
+      }
     }
   } catch (error) {
     console.error('Error updating client order statistics:', error);

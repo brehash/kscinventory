@@ -1,16 +1,5 @@
 import React, { useState } from 'react';
-import { 
-  Calendar, 
-  Download, 
-  Loader2, 
-  FileSpreadsheet,
-  FileCsv,
-  FilePdf,
-  FileJson,
-  FileText,
-  Shield,
-  Check
-} from 'lucide-react';
+import { Calendar, Download, Loader2, FileSpreadsheet, File as FileCsv, File as FilePdf, FileJson, FileText, Shield, Check } from 'lucide-react';
 
 /**
  * Export Center component to export data in various formats

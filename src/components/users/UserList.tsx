@@ -7,6 +7,8 @@ import { Plus, Edit, Trash, AlertTriangle, Loader2, Shield } from 'lucide-react'
 import Modal from '../ui/Modal';
 import { useAuth } from '../auth/AuthProvider';
 import { logActivity } from '../../utils/activityLogger';
+import { deleteUser, getAuth } from 'firebase/auth';
+import { httpsCallable, getFunctions } from 'firebase/functions';
 
 const UserList: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -14,9 +16,12 @@ const UserList: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [deletingUser, setDeletingUser] = useState(false);
   
   const { currentUser } = useAuth();
   const navigate = useNavigate();
+  const auth = getAuth();
+  const functions = getFunctions();
 
   // Fetch users from Firestore
   useEffect(() => {
@@ -56,10 +61,28 @@ const UserList: React.FC = () => {
     if (!userToDelete || !currentUser) return;
     
     try {
+      setDeletingUser(true);
+
       // You cannot delete yourself
       if (userToDelete.uid === currentUser.uid) {
         setError('You cannot delete your own account');
         setShowDeleteModal(false);
+        setDeletingUser(false);
+        return;
+      }
+      
+      // Delete user from Firebase Authentication using a Cloud Function
+      // Note: In a real application, you would need to create this Cloud Function
+      // since client-side SDKs cannot delete other users directly
+      try {
+        // This is a pattern that would work if you had a Cloud Function
+        const deleteUserAuth = httpsCallable(functions, 'deleteUser');
+        await deleteUserAuth({ uid: userToDelete.uid });
+      } catch (authError) {
+        console.error('Error deleting user from Firebase Auth:', authError);
+        setError('Failed to delete user account. User document was not removed.');
+        setShowDeleteModal(false);
+        setDeletingUser(false);
         return;
       }
       
@@ -79,10 +102,12 @@ const UserList: React.FC = () => {
       setUsers(users.filter(user => user.uid !== userToDelete.uid));
       setShowDeleteModal(false);
       setUserToDelete(null);
+      setDeletingUser(false);
     } catch (error) {
       console.error('Error deleting user:', error);
       setError('Failed to delete user');
       setShowDeleteModal(false);
+      setDeletingUser(false);
     }
   };
   
@@ -246,7 +271,7 @@ const UserList: React.FC = () => {
               Are you sure you want to delete the user <span className="font-medium">{userToDelete?.displayName || userToDelete?.email}</span>? This action cannot be undone.
             </p>
             <p className="text-sm text-gray-500 mt-2">
-              This will remove their account but keep their activity history.
+              This will remove their account completely, including their authentication credentials and user document.
             </p>
           </div>
         </div>
@@ -254,14 +279,23 @@ const UserList: React.FC = () => {
           <button
             type="button"
             onClick={handleDelete}
-            className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm"
+            disabled={deletingUser}
+            className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
           >
-            Delete
+            {deletingUser ? (
+              <>
+                <Loader2 className="animate-spin h-4 w-4 mr-2" />
+                Deleting...
+              </>
+            ) : (
+              'Delete'
+            )}
           </button>
           <button
             type="button"
             onClick={() => setShowDeleteModal(false)}
-            className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+            disabled={deletingUser}
+            className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
           >
             Cancel
           </button>

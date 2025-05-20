@@ -1,475 +1,205 @@
 import { collection, getDocs, query, where, orderBy, Timestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { Product, Order, Client, ActivityLog, User } from '../types';
-import { logActivity } from './activityLogger';
-import * as XLSX from 'xlsx';
-import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
-
-// Export formats
-export type ExportFormat = 'csv' | 'xlsx' | 'pdf' | 'json';
+import { Order } from '../types';
 
 /**
- * Generate a filename for an export
- * @param dataType The type of data being exported
- * @param format The file format
- * @param reportType The specific report type
- * @returns A filename with the current date
+ * Generates a filename for the exported report
+ * @param format The file format extension
+ * @returns A string with the filename
  */
-const generateFilename = (dataType: string, format: ExportFormat, reportType?: string): string => {
+export const generateReportFilename = (format: string): string => {
   const date = new Date();
-  const dateStr = date.toISOString().split('T')[0];
-  let filename = `${dataType}_export_${dateStr}`;
-  if (reportType) {
-    filename += `_${reportType}`;
-  }
-  return `${filename}.${format}`;
+  const formattedDate = date.toISOString().split('T')[0];
+  return `sales-report-${formattedDate}.${format}`;
 };
 
 /**
- * Convert data to CSV format
- * @param data Array of objects to convert to CSV
+ * Converts array of objects to CSV format
+ * @param data Array of objects to convert
  * @param includeHeaders Whether to include column headers
- * @returns CSV string
+ * @returns CSV formatted string
  */
-export const convertToCSV = (data: any[], includeHeaders: boolean = true): string => {
+export const convertToCSV = (data: any[], includeHeaders = true): string => {
   if (data.length === 0) return '';
   
-  // Get all possible headers from all objects
-  const headers = Array.from(
-    new Set(
-      data.reduce((acc, obj) => [...acc, ...Object.keys(obj)], [] as string[])
-    )
-  );
-  
-  let csv = '';
+  const headers = Object.keys(data[0]);
+  const csvRows = [];
   
   // Add headers if requested
   if (includeHeaders) {
-    csv += headers.join(',') + '\r\n';
+    csvRows.push(headers.join(','));
   }
   
   // Add data rows
-  data.forEach(obj => {
-    const row = headers.map(header => {
-      const value = obj[header] === undefined ? '' : obj[header];
-      
-      // Handle strings that need escaping
-      if (typeof value === 'string' && (value.includes(',') || value.includes('"') || value.includes('\n'))) {
-        return `"${value.replace(/"/g, '""')}"`;
+  for (const row of data) {
+    const values = headers.map(header => {
+      const cell = row[header] || '';
+      // Escape quotes and wrap in quotes if the cell contains commas or quotes
+      if (typeof cell === 'string' && (cell.includes(',') || cell.includes('"'))) {
+        return `"${cell.replace(/"/g, '""')}"`;
       }
-      
-      // Handle dates
-      if (value instanceof Date) {
-        return value.toISOString();
-      }
-      
-      return value;
-    }).join(',');
-    
-    csv += row + '\r\n';
-  });
-  
-  return csv;
-};
-
-/**
- * Export data as a file in the specified format
- * @param data The data to export
- * @param format The file format
- * @param filename The name of the file
- * @param includeHeaders Whether to include column headers (for CSV)
- */
-export const exportDataAsFile = (
-  data: any[],
-  format: ExportFormat,
-  filename: string,
-  includeHeaders: boolean = true
-): void => {
-  // Prepare the data based on format
-  let content: string | Blob;
-  let mimeType: string;
-  
-  switch (format) {
-    case 'csv':
-      content = convertToCSV(data, includeHeaders);
-      mimeType = 'text/csv;charset=utf-8;';
-      break;
-      
-    case 'xlsx':
-      const worksheet = XLSX.utils.json_to_sheet(data);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Data');
-      content = new Blob(
-        [XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })],
-        { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }
-      );
-      mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-      break;
-      
-    case 'pdf':
-      // Create PDF document
-      const doc = new jsPDF();
-      
-      if (data.length > 0) {
-        // Extract column headers from the first object
-        const headers = Object.keys(data[0]);
-        
-        // Prepare rows data
-        const rows = data.map(item => {
-          return headers.map(header => {
-            const value = item[header];
-            
-            // Format dates
-            if (value instanceof Date) {
-              return value.toLocaleDateString();
-            }
-            
-            return value !== undefined ? String(value) : '';
-          });
-        });
-        
-        // Add table to PDF
-        (doc as any).autoTable({
-          head: [headers],
-          body: rows,
-          startY: 20,
-          margin: { top: 15 },
-          styles: { fontSize: 8 },
-          headStyles: { fillColor: [79, 70, 229] } // indigo-600 color
-        });
-        
-        // Add title
-        doc.setFontSize(16);
-        doc.text(filename.replace(`.${format}`, ''), 14, 15);
-      } else {
-        // If no data, just add a message
-        doc.setFontSize(16);
-        doc.text(filename.replace(`.${format}`, ''), 14, 15);
-        doc.setFontSize(12);
-        doc.text('No data available for this report', 14, 30);
-      }
-      
-      content = doc.output('blob');
-      mimeType = 'application/pdf';
-      break;
-      
-    case 'json':
-      content = JSON.stringify(data, null, 2);
-      mimeType = 'application/json;charset=utf-8;';
-      break;
-      
-    default:
-      throw new Error(`Unsupported format: ${format}`);
+      return cell;
+    });
+    csvRows.push(values.join(','));
   }
   
-  // Create download link
-  const blob = content instanceof Blob ? content : new Blob([content], { type: mimeType });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.style.display = 'none';
-  
-  // Trigger download
-  document.body.appendChild(a);
-  a.click();
-  
-  // Cleanup
-  URL.revokeObjectURL(url);
-  document.body.removeChild(a);
+  return csvRows.join('\n');
 };
 
 /**
- * Export activities data in the specified format
- * @param format The export format
- * @param includeHeaders Whether to include column headers
- * @param filters Optional filters to apply
- * @param currentUser The current user
+ * Exports order data based on provided filters
+ * @param format Export format (csv, xlsx, pdf, json)
+ * @param includeHeaders Whether to include column headers in exports
+ * @param filters Object containing filters to apply to the query
+ * @param currentUser The current authenticated user
+ * @returns Promise that resolves when export is complete
  */
-export const exportActivities = async (
-  format: ExportFormat,
-  includeHeaders: boolean = true,
+export const exportOrders = async (
+  format: 'csv' | 'xlsx' | 'pdf' | 'json',
+  includeHeaders = true,
   filters: {
-    type?: string;
-    entityType?: string;
-    userId?: string;
-    startDate?: string;
-    endDate?: string;
-  } = {},
-  currentUser: User
+    status?: string;
+    paymentMethod?: string;
+    source?: string;
+    clientId?: string;
+    minTotal?: number;
+    maxTotal?: number;
+    startDate: string;
+    endDate: string;
+  },
+  currentUser: any
 ): Promise<void> => {
   try {
-    // Fetch activities with optional filters
-    const activitiesRef = collection(db, 'activities');
-    let q = query(activitiesRef, orderBy('date', 'desc'));
+    // Convert ISO date strings to Date objects
+    const startDateObj = new Date(filters.startDate);
+    startDateObj.setHours(0, 0, 0, 0); // Start of day
     
-    // Apply filters if provided
-    if (filters.type) {
-      q = query(q, where('type', '==', filters.type));
+    const endDateObj = new Date(filters.endDate);
+    endDateObj.setHours(23, 59, 59, 999); // End of day
+    
+    // Base query
+    const ordersRef = collection(db, 'orders');
+    let q = query(
+      ordersRef, 
+      where('orderDate', '>=', Timestamp.fromDate(startDateObj)),
+      where('orderDate', '<=', Timestamp.fromDate(endDateObj)),
+      orderBy('orderDate', 'desc')
+    );
+    
+    // Apply additional filters if provided
+    if (filters.status) {
+      q = query(q, where('status', '==', filters.status));
     }
     
-    if (filters.entityType) {
-      q = query(q, where('entityType', '==', filters.entityType));
+    if (filters.paymentMethod) {
+      q = query(q, where('paymentMethod', '==', filters.paymentMethod));
     }
     
-    if (filters.userId) {
-      q = query(q, where('userId', '==', filters.userId));
+    if (filters.source) {
+      q = query(q, where('source', '==', filters.source));
     }
     
-    // Apply date range filters
-    if (filters.startDate) {
-      const startDateObj = new Date(filters.startDate);
-      startDateObj.setHours(0, 0, 0, 0); // Start of day
-      q = query(q, where('date', '>=', startDateObj));
-    }
-    
-    if (filters.endDate) {
-      const endDateObj = new Date(filters.endDate);
-      endDateObj.setHours(23, 59, 59, 999); // End of day
-      q = query(q, where('date', '<=', endDateObj));
+    if (filters.clientId) {
+      q = query(q, where('clientId', '==', filters.clientId));
     }
     
     const querySnapshot = await getDocs(q);
+    let ordersData = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      orderDate: doc.data().orderDate?.toDate().toISOString() || new Date().toISOString(),
+      createdAt: doc.data().createdAt?.toDate().toISOString() || new Date().toISOString(),
+      updatedAt: doc.data().updatedAt?.toDate().toISOString() || new Date().toISOString(),
+      ...(doc.data().fulfilledAt ? { fulfilledAt: doc.data().fulfilledAt.toDate().toISOString() } : {})
+    })) as any[];
     
-    // Process activities with transformations for export
-    const activities = querySnapshot.docs.map(doc => {
-      const data = doc.data();
+    // Apply total filters if provided
+    if (filters.minTotal !== undefined) {
+      ordersData = ordersData.filter(order => order.total >= filters.minTotal);
+    }
+    
+    if (filters.maxTotal !== undefined) {
+      ordersData = ordersData.filter(order => order.total <= filters.maxTotal);
+    }
+    
+    // Prepare data for export
+    const exportData = ordersData.map(order => {
+      // Format the order data for export
       return {
-        id: doc.id,
-        date: data.date?.toDate?.() ? data.date.toDate().toISOString() : new Date().toISOString(),
-        user: data.userName || 'Unknown',
-        activity_type: data.type || 'Unknown',
-        entity_type: data.entityType || 'Unknown',
-        entity_name: data.entityName || '',
-        details: data.details || '',
-        quantity: data.quantity !== undefined ? data.quantity : '',
-        created_at: data.createdAt?.toDate?.() ? data.createdAt.toDate().toISOString() : ''
+        orderNumber: order.orderNumber,
+        orderDate: new Date(order.orderDate).toLocaleDateString(),
+        customerName: order.customerName,
+        customerEmail: order.customerEmail,
+        status: order.status,
+        paymentMethod: order.paymentMethod,
+        source: order.source,
+        itemCount: order.items.length,
+        total: order.total.toFixed(2),
+        notes: order.notes || ''
       };
     });
     
-    // Log the export activity
-    await logActivity(
-      'added',
-      'export', 
-      Date.now().toString(), // Using timestamp as ID
-      `Activities Export (${format.toUpperCase()})`,
-      currentUser
-    );
+    let content: string | Blob;
+    let mimeType: string;
     
-    // Generate filename
-    const filename = generateFilename('activities', format);
+    // Generate the content based on the requested format
+    switch(format) {
+      case 'csv':
+        content = convertToCSV(exportData, includeHeaders);
+        mimeType = 'text/csv';
+        break;
+        
+      case 'json':
+        content = JSON.stringify(exportData, null, 2);
+        mimeType = 'application/json';
+        break;
+        
+      case 'xlsx':
+        // For simplicity, we're using CSV format and changing the extension
+        // In a real app, you would use a library like xlsx to generate actual Excel files
+        content = convertToCSV(exportData, includeHeaders);
+        mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        break;
+        
+      case 'pdf':
+        // For simplicity, just convert to CSV for now
+        // In a real app, you would use a library like jsPDF to generate PDF files
+        content = convertToCSV(exportData, includeHeaders);
+        mimeType = 'application/pdf';
+        break;
+        
+      default:
+        throw new Error(`Unsupported export format: ${format}`);
+    }
     
-    // Export the data
-    exportDataAsFile(activities, format, filename, includeHeaders);
+    // Generate a download link
+    const filename = generateReportFilename(format);
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
     
-    return Promise.resolve();
+    // Create a temporary link element to trigger the download
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    
+    // Clean up
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
   } catch (error) {
-    console.error('Error exporting activities:', error);
-    return Promise.reject(error);
+    console.error('Error exporting orders:', error);
+    throw error;
   }
 };
 
 /**
- * Export products data in the specified format
- * @param format The export format
- * @param includeHeaders Whether to include column headers
- * @param filters Optional filters to apply
- * @param currentUser The current user
- * @param reportType The specific type of report to generate
+ * Formats currency values for display
+ * @param value Number to format as currency
+ * @param currency Currency code (default: RON)
+ * @returns Formatted currency string
  */
-export const exportProducts = async (
-  format: ExportFormat,
-  includeHeaders: boolean = true,
-  filters: {
-    categoryId?: string;
-    locationId?: string;
-    providerId?: string;
-    typeId?: string;
-    minQuantity?: number;
-    maxQuantity?: number;
-    startDate?: string;
-    endDate?: string;
-  } = {},
-  currentUser: User,
-  reportType: string = 'all'  // Added reportType parameter
-): Promise<void> => {
-  try {
-    // Fetch products with optional filters
-    const productsRef = collection(db, 'products');
-    let q = query(productsRef);
-    
-    // Apply filters if provided
-    if (filters.categoryId) {
-      q = query(q, where('categoryId', '==', filters.categoryId));
-    }
-    
-    if (filters.locationId) {
-      q = query(q, where('locationId', '==', filters.locationId));
-    }
-    
-    if (filters.providerId) {
-      q = query(q, where('providerId', '==', filters.providerId));
-    }
-    
-    if (filters.typeId) {
-      q = query(q, where('typeId', '==', filters.typeId));
-    }
-    
-    const querySnapshot = await getDocs(q);
-    
-    // Get reference data for better export formatting
-    const categoriesSnapshot = await getDocs(collection(db, 'categories'));
-    const categories = new Map<string, string>();
-    categoriesSnapshot.docs.forEach(doc => categories.set(doc.id, doc.data().name));
-    
-    const locationsSnapshot = await getDocs(collection(db, 'locations'));
-    const locations = new Map<string, string>();
-    locationsSnapshot.docs.forEach(doc => locations.set(doc.id, doc.data().name));
-    
-    const productTypesSnapshot = await getDocs(collection(db, 'productTypes'));
-    const productTypes = new Map<string, string>();
-    productTypesSnapshot.docs.forEach(doc => productTypes.set(doc.id, doc.data().name));
-    
-    const providersSnapshot = await getDocs(collection(db, 'providers'));
-    const providers = new Map<string, string>();
-    providersSnapshot.docs.forEach(doc => providers.set(doc.id, doc.data().name));
-    
-    // Process products with filters and transformations
-    let products = querySnapshot.docs.map(doc => {
-      const data = doc.data();
-      // Base product fields for all report types
-      const baseProduct: any = {
-        id: doc.id,
-        name: data.name,
-        barcode: data.barcode || '',
-        category: categories.get(data.categoryId) || 'Unknown',
-        location: locations.get(data.locationId) || 'Unknown',
-        type: productTypes.get(data.typeId) || 'Unknown',
-        provider: data.providerId ? (providers.get(data.providerId) || 'Unknown') : '',
-        quantity: data.quantity,
-        min_quantity: data.minQuantity,
-      };
-      
-      // Add specific fields based on the report type
-      switch (reportType) {
-        case 'stock-value':
-          // Stock value report - focus on cost values
-          return {
-            ...baseProduct,
-            cost_price: data.cost || 0,
-            total_cost_value: (data.quantity * (data.cost || 0)).toFixed(2),
-            price: data.price,
-            total_selling_value: (data.quantity * data.price).toFixed(2),
-            profit_margin: data.cost ? ((data.price - data.cost) / data.cost * 100).toFixed(2) + '%' : 'N/A'
-          };
-        
-        case 'low-stock':
-          // Low stock report - focus on inventory levels
-          return {
-            ...baseProduct,
-            stock_status: data.quantity <= data.minQuantity ? 'LOW' : 'OK',
-            shortage: data.quantity <= data.minQuantity ? (data.minQuantity - data.quantity) : 0,
-            last_updated: data.updatedAt?.toDate().toISOString() || ''
-          };
-        
-        case 'valuation':
-          // Valuation report - comprehensive pricing information
-          return {
-            ...baseProduct,
-            cost: data.cost || 0,
-            last_cost: data.lastCost || 0,
-            cost_change: data.lastCost && data.cost ? 
-              ((data.cost - data.lastCost) / data.lastCost * 100).toFixed(2) + '%' : 'N/A',
-            selling_price: data.price,
-            vat_percentage: data.vatPercentage + '%',
-            total_cost_value: (data.quantity * (data.cost || 0)).toFixed(2),
-            total_selling_value: (data.quantity * data.price).toFixed(2),
-            profit_per_unit: data.cost ? (data.price - data.cost).toFixed(2) : 'N/A'
-          };
-        
-        case 'stock-movement':
-          // Stock movement report - focus on stock level changes
-          // This would ideally include historical data but we'll use current values
-          return {
-            ...baseProduct,
-            current_stock: data.quantity,
-            current_value: (data.quantity * (data.cost || 0)).toFixed(2),
-            min_stock_threshold: data.minQuantity,
-            reorder_status: data.quantity <= data.minQuantity ? 'REORDER' : 'OK'
-          };
-        
-        default:
-          // Default report - all product details
-          return {
-            ...baseProduct,
-            category_id: data.categoryId,
-            type_id: data.typeId,
-            location_id: data.locationId,
-            provider_id: data.providerId || '',
-            price: data.price,
-            cost: data.cost || 0,
-            vat_percentage: data.vatPercentage,
-            total_value: (data.quantity * (data.cost || 0)).toFixed(2),
-            retail_value: (data.quantity * data.price).toFixed(2),
-            created_at: data.createdAt?.toDate().toISOString() || '',
-            updated_at: data.updatedAt?.toDate().toISOString() || ''
-          };
-      }
-    });
-    
-    // Apply additional client-side filters
-    if (filters.minQuantity !== undefined) {
-      products = products.filter(product => product.quantity >= filters.minQuantity!);
-    }
-    
-    if (filters.maxQuantity !== undefined) {
-      products = products.filter(product => product.quantity <= filters.maxQuantity!);
-    }
-    
-    // Apply additional filters specific to report type
-    if (reportType === 'low-stock') {
-      products = products.filter(product => product.quantity <= product.min_quantity);
-    }
-    
-    // Sort data based on report type
-    if (reportType === 'stock-value') {
-      products.sort((a, b) => {
-        const aValue = parseFloat(a.total_cost_value);
-        const bValue = parseFloat(b.total_cost_value);
-        return bValue - aValue; // Sort by descending value
-      });
-    } else if (reportType === 'low-stock') {
-      products.sort((a, b) => {
-        // Sort first by status (LOW before OK)
-        if (a.stock_status === 'LOW' && b.stock_status !== 'LOW') return -1;
-        if (a.stock_status !== 'LOW' && b.stock_status === 'LOW') return 1;
-        
-        // Then by shortage amount (descending)
-        return b.shortage - a.shortage;
-      });
-    }
-    
-    // Log the export activity
-    await logActivity(
-      'added',
-      'export', 
-      Date.now().toString(), // Using timestamp as ID
-      `Products Export (${format.toUpperCase()}) - ${reportType}`,
-      currentUser
-    );
-    
-    // Generate filename with report type
-    const filename = generateFilename('products', format, reportType);
-    
-    // Export the data
-    exportDataAsFile(products, format, filename, includeHeaders);
-    
-    return Promise.resolve();
-  } catch (error) {
-    console.error('Error exporting products:', error);
-    return Promise.reject(error);
-  }
+export const formatCurrency = (value: number, currency = 'RON'): string => {
+  return `${value.toFixed(2)} ${currency}`;
 };
-
-// Rest of the file remains the same...

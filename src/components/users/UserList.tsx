@@ -71,23 +71,41 @@ const UserList: React.FC = () => {
         return;
       }
       
-      // Delete user from Firebase Authentication using a Cloud Function
-      // Note: In a real application, you would need to create this Cloud Function
-      // since client-side SDKs cannot delete other users directly
+      // Delete user from Firestore first, since this has a higher chance of success
+      await deleteDoc(doc(db, 'users', userToDelete.uid));
+      
+      // Try to delete user from Firebase Authentication using a Cloud Function
+      // This is prone to errors if the Cloud Function is not set up correctly
       try {
-        // This is a pattern that would work if you had a Cloud Function
-        const deleteUserAuth = httpsCallable(functions, 'deleteUser');
-        await deleteUserAuth({ uid: userToDelete.uid });
-      } catch (authError) {
+        // Only proceed if the functions object exists
+        if (functions) {
+          const deleteUserAuth = httpsCallable(functions, 'deleteUser');
+          await deleteUserAuth({ uid: userToDelete.uid });
+        } else {
+          console.warn('Firebase Functions not available. Auth user not deleted.');
+        }
+      } catch (authError: any) {
+        // Log detailed error info for debugging
         console.error('Error deleting user from Firebase Auth:', authError);
-        setError('Failed to delete user account. User document was not removed.');
+        
+        // Don't stop the process - we've already deleted the user from Firestore
+        // Just show a warning that the auth account might still exist
+        setError(
+          `User document deleted, but there was an issue removing their authentication account: ${
+            authError.message || 'Cloud Function error'
+          }. An administrator may need to remove their auth account manually.`
+        );
+        
+        // Continue with the process
         setShowDeleteModal(false);
+        setUserToDelete(null);
         setDeletingUser(false);
+        
+        // Update the local state to remove the deleted user
+        setUsers(users.filter(user => user.uid !== userToDelete.uid));
+        
         return;
       }
-      
-      // Delete user doc from Firestore
-      await deleteDoc(doc(db, 'users', userToDelete.uid));
       
       // Log the activity
       await logActivity(
@@ -103,9 +121,9 @@ const UserList: React.FC = () => {
       setShowDeleteModal(false);
       setUserToDelete(null);
       setDeletingUser(false);
-    } catch (error) {
-      console.error('Error deleting user:', error);
-      setError('Failed to delete user');
+    } catch (error: any) {
+      console.error('Error in delete process:', error);
+      setError(`Failed to delete user: ${error.message || 'Unknown error'}`);
       setShowDeleteModal(false);
       setDeletingUser(false);
     }

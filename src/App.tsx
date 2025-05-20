@@ -41,6 +41,11 @@ import ClientEdit from './components/crm/ClientEdit';
 import ReportingLayout from './components/reporting/ReportingLayout';
 import ReportingHome from './components/reporting/ReportingHome';
 import SAGAExport from './components/reporting/SAGAExport';
+import InventoryReports from './components/reporting/InventoryReports';
+import SalesReports from './components/reporting/SalesReports';
+import CustomReports from './components/reporting/CustomReports';
+import ExportCenter from './components/reporting/ExportCenter';
+import ReportsDashboard from './components/reporting/ReportsDashboard';
 
 function App() {
   return (
@@ -121,12 +126,11 @@ function App() {
             >
               <Route index element={<ReportingHome />} />
               <Route path="saga-export" element={<SAGAExport />} />
-              {/* Placeholders for future reporting features */}
-              <Route path="inventory" element={<div className="p-4">Inventory Reports - Coming soon</div>} />
-              <Route path="sales" element={<div className="p-4">Sales Reports - Coming soon</div>} />
-              <Route path="custom" element={<div className="p-4">Custom Reports - Coming soon</div>} />
-              <Route path="export" element={<div className="p-4">Export Center - Coming soon</div>} />
-              <Route path="dashboard" element={<div className="p-4">Reports Dashboard - Coming soon</div>} />
+              <Route path="inventory" element={<InventoryReports />} />
+              <Route path="sales" element={<SalesReports />} />
+              <Route path="custom" element={<CustomReports />} />
+              <Route path="export" element={<ExportCenter />} />
+              <Route path="dashboard" element={<ReportsDashboard />} />
             </Route>
             
             {/* User Management Routes - Admin Only */}

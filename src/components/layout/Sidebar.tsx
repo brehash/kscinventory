@@ -213,7 +213,7 @@ const Sidebar: React.FC = () => {
 
       {/* Desktop sidebar */}
       <div 
-        className={`h-screen bg-gray-800 text-white flex-col transition-all duration-300 hidden md:flex ${
+        className={`h-screen bg-gray-100 text-white flex-col transition-all duration-300 hidden md:flex ${
           collapsed ? 'md:w-16' : 'md:w-64'
         }`}
       >

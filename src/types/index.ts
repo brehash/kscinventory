@@ -298,3 +298,25 @@ export interface ClientFilterOptions {
     end: Date;
   };
 }
+
+export interface OrderStats {
+  totalOrders: number;
+  totalRevenue: number;
+  pendingOrders: number;
+  processingOrders: number;
+  completedOrders: number;
+  cancelledOrders: number;
+  averageOrderValue: number;
+}
+
+export interface OrdersByStatusData {
+  name: string;
+  value: number;
+  color: string;
+}
+
+export interface OrdersByMonthData {
+  name: string;
+  count: number;
+  revenue: number;
+}

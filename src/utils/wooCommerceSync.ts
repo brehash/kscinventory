@@ -353,10 +353,10 @@ const createOrUpdateClient = async (
  * @param clientId The client ID to update
  * @param orderTotal The total amount of the order
  */
-const updateClientOrderStats = async (clientId: string | null): Promise<void> => {
+const updateClientOrderStats = async (clientId: string | null, orderTotal: number): Promise<void> => {
   try {
     if (!clientId) return;
-    
+
     const clientRef = doc(db, 'clients', clientId);
     const clientDoc = await getDoc(clientRef);
     
@@ -365,7 +365,7 @@ const updateClientOrderStats = async (clientId: string | null): Promise<void> =>
       
       // Calculate new values
       const totalOrders = clientData.totalOrders || 0;
-      const totalSpent = (clientData.totalSpent || 0);
+      const totalSpent = (clientData.totalSpent || 0) + orderTotal;
       const averageOrderValue = totalOrders > 0 ? totalSpent / totalOrders : 0;
       
       // Set last order date to current date
@@ -373,6 +373,7 @@ const updateClientOrderStats = async (clientId: string | null): Promise<void> =>
       
       // Update client with order statistics
       await updateDoc(clientRef, {
+        totalSpent,
         averageOrderValue,
         lastOrderDate
       });
@@ -541,7 +542,7 @@ const convertWooCommerceOrder = async (wcOrder: any): Promise<Omit<Order, 'id'>>
   if (clientId) {
     try {
       // console.log(`Updating order statistics for client ${clientId} with order total ${total}`);
-      await updateClientOrderStats(clientId);
+      await updateClientOrderStats(clientId, total);
     } catch (statsError) {
       console.error(`Error updating client order statistics for client ${clientId}:`, statsError);
       // Error in updating stats doesn't affect the order creation

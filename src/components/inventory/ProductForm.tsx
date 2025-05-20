@@ -52,7 +52,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, onSubmit, onCanc
     description: '', 
     website: '', 
     phoneNumber: '',
-    excludeFromReports: false
+    excludeFromReports: false 
   });
   
   // Loading states for entity creation

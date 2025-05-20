@@ -149,7 +149,7 @@ const ProviderSettings: React.FC = () => {
 
   const handleDelete = async () => {
     if (!providerToDelete || !currentUser) return;
-    
+
     try {
       await deleteDoc(doc(db, 'providers', providerToDelete.id));
       

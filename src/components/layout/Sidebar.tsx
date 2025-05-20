@@ -190,7 +190,7 @@ const Sidebar: React.FC = () => {
             {!collapsed && <span className="ml-3">Logout</span>}
           </button>
           {collapsed && hoveredItem === "Logout" && (
-            <div className="absolute left-12 top-1/2 -translate-y-1/2 bg-gray-800 text-white text-xs rounded py-1 px-2 z-10">
+            <div className="absolute left-12 top-1/2 -translate-y-1/2 bg-gray-800 text-black text-xs rounded py-1 px-2 z-10">
               Logout
             </div>
           )}

@@ -51,7 +51,8 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, onSubmit, onCanc
     name: '', 
     description: '', 
     website: '', 
-    phoneNumber: '' 
+    phoneNumber: '',
+    excludeFromReports: false
   });
   
   // Loading states for entity creation
@@ -203,9 +204,12 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, onSubmit, onCanc
   };
   
   // Handler for new provider form changes
-  const handleProviderChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setNewProvider({ ...newProvider, [name]: value });
+  const handleProviderChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value, type, checked } = e.target as HTMLInputElement;
+    setNewProvider({ 
+      ...newProvider, 
+      [name]: type === 'checkbox' ? checked : value 
+    });
   };
   
   // Handler to create a new category
@@ -397,6 +401,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, onSubmit, onCanc
         description: newProvider.description.trim(),
         website: newProvider.website.trim() || null,
         phoneNumber: newProvider.phoneNumber.trim() || null,
+        excludeFromReports: newProvider.excludeFromReports || false,
         createdAt: new Date()
       };
       
@@ -423,7 +428,13 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, onSubmit, onCanc
       setFormData({ ...formData, providerId: docRef.id });
       
       // Reset form fields but keep form open
-      setNewProvider({ name: '', description: '', website: '', phoneNumber: '' });
+      setNewProvider({ 
+        name: '', 
+        description: '', 
+        website: '', 
+        phoneNumber: '',
+        excludeFromReports: false
+      });
       
     } catch (error) {
       console.error('Error creating provider:', error);
@@ -461,7 +472,13 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, onSubmit, onCanc
   const toggleProviderForm = () => {
     setShowProviderForm(!showProviderForm);
     if (showProviderForm) {
-      setNewProvider({ name: '', description: '', website: '', phoneNumber: '' });
+      setNewProvider({ 
+        name: '', 
+        description: '', 
+        website: '', 
+        phoneNumber: '',
+        excludeFromReports: false
+      });
       setProviderError(null);
     }
   };
@@ -864,6 +881,22 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, onSubmit, onCanc
                     className="block w-full px-3 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                   />
                 </div>
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="excludeFromReports"
+                    name="excludeFromReports"
+                    checked={newProvider.excludeFromReports}
+                    onChange={handleProviderChange}
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                  />
+                  <label htmlFor="excludeFromReports" className="ml-2 text-xs text-gray-700">
+                    Exclude from reports
+                  </label>
+                </div>
+                <p className="text-xs text-gray-500">
+                  Products from this provider will still be tracked but won't appear in provider-based reports.
+                </p>
                 {providerError && (
                   <div className="text-xs text-red-500">{providerError}</div>
                 )}

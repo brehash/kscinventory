@@ -114,7 +114,8 @@ const Dashboard: React.FC = () => {
         const providersSnapshot = await getDocs(providersRef);
         const providers = providersSnapshot.docs.map(doc => ({
           id: doc.id,
-          name: doc.data().name
+          name: doc.data().name,
+          excludeFromReports: doc.data().excludeFromReports || false
         }));
         
         // Calculate stats
@@ -210,20 +211,26 @@ const Dashboard: React.FC = () => {
         
         products.forEach(product => {
           if (product.providerId) {
-            const costValue = (product.cost || 0) * product.quantity;
-            const sellingValue = product.price * product.quantity;
+            // Get provider to check if it should be excluded
+            const provider = providers.find(p => p.id === product.providerId);
             
-            // Cost values
-            providerValues.set(
-              product.providerId, 
-              (providerValues.get(product.providerId) || 0) + costValue
-            );
-            
-            // Selling values
-            providerSellingValues.set(
-              product.providerId, 
-              (providerSellingValues.get(product.providerId) || 0) + sellingValue
-            );
+            // Only include provider if it shouldn't be excluded from reports
+            if (provider && !provider.excludeFromReports) {
+              const costValue = (product.cost || 0) * product.quantity;
+              const sellingValue = product.price * product.quantity;
+              
+              // Cost values
+              providerValues.set(
+                product.providerId, 
+                (providerValues.get(product.providerId) || 0) + costValue
+              );
+              
+              // Selling values
+              providerSellingValues.set(
+                product.providerId, 
+                (providerSellingValues.get(product.providerId) || 0) + sellingValue
+              );
+            }
           }
         });
         

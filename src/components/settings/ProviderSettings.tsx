@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { Provider } from '../../types';
-import { Plus, Edit, Trash, AlertTriangle, Globe, Phone } from 'lucide-react';
+import { Plus, Edit, Trash, AlertTriangle, Globe, Phone, Check, X } from 'lucide-react';
 import Modal from '../ui/Modal';
 import { useAuth } from '../auth/AuthProvider';
 import { logActivity } from '../../utils/activityLogger';
@@ -14,9 +14,10 @@ const ProviderSettings: React.FC = () => {
   const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
   const [formData, setFormData] = useState({ 
     name: '', 
-    description: '',
+    description: '', 
     website: '', 
-    phoneNumber: '' 
+    phoneNumber: '',
+    excludeFromReports: false
   });
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [providerToDelete, setProviderToDelete] = useState<Provider | null>(null);
@@ -54,7 +55,8 @@ const ProviderSettings: React.FC = () => {
       name: '', 
       description: '', 
       website: '', 
-      phoneNumber: '' 
+      phoneNumber: '',
+      excludeFromReports: false
     });
     setEditingProvider(null);
   };
@@ -71,6 +73,7 @@ const ProviderSettings: React.FC = () => {
           description: formData.description,
           website: formData.website || null,
           phoneNumber: formData.phoneNumber || null,
+          excludeFromReports: formData.excludeFromReports || false,
         });
         
         // Log the activity - removed undefined quantity parameter
@@ -89,7 +92,8 @@ const ProviderSettings: React.FC = () => {
                 name: formData.name, 
                 description: formData.description,
                 website: formData.website || undefined,
-                phoneNumber: formData.phoneNumber || undefined
+                phoneNumber: formData.phoneNumber || undefined,
+                excludeFromReports: formData.excludeFromReports || false
               } 
             : prov
         ));
@@ -101,6 +105,7 @@ const ProviderSettings: React.FC = () => {
           description: formData.description,
           website: formData.website || null,
           phoneNumber: formData.phoneNumber || null,
+          excludeFromReports: formData.excludeFromReports || false,
           createdAt: new Date()
         };
         
@@ -130,7 +135,8 @@ const ProviderSettings: React.FC = () => {
       name: provider.name,
       description: provider.description,
       website: provider.website || '',
-      phoneNumber: provider.phoneNumber || ''
+      phoneNumber: provider.phoneNumber || '',
+      excludeFromReports: provider.excludeFromReports || false
     });
     setEditingProvider(provider);
     setShowEditModal(true);
@@ -237,6 +243,24 @@ const ProviderSettings: React.FC = () => {
             placeholder="+1 (123) 456-7890"
           />
         </div>
+
+        <div>
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="excludeFromReports"
+              checked={formData.excludeFromReports}
+              onChange={(e) => setFormData({ ...formData, excludeFromReports: e.target.checked })}
+              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+            />
+            <label htmlFor="excludeFromReports" className="ml-2 block text-sm text-gray-900">
+              Exclude from reports
+            </label>
+          </div>
+          <p className="mt-1 text-xs text-gray-500">
+            Products from this provider will still be tracked in inventory but the provider won't be shown in provider-based reports.
+          </p>
+        </div>
         
         <div className="flex justify-end space-x-3">
           <button
@@ -295,6 +319,9 @@ const ProviderSettings: React.FC = () => {
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Contact Information
                 </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  In Reports
+                </th>
                 <th scope="col" className="relative px-6 py-3">
                   <span className="sr-only">Actions</span>
                 </th>
@@ -331,6 +358,21 @@ const ProviderSettings: React.FC = () => {
                         )}
                       </div>
                     </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center text-sm">
+                        {provider.excludeFromReports ? (
+                          <span className="inline-flex items-center text-red-600">
+                            <X className="h-4 w-4 mr-1" />
+                            Excluded
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center text-green-600">
+                            <Check className="h-4 w-4 mr-1" />
+                            Included
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex justify-end space-x-2">
                         <button
@@ -351,7 +393,7 @@ const ProviderSettings: React.FC = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={4} className="px-6 py-4 text-center text-gray-500">
+                  <td colSpan={5} className="px-6 py-4 text-center text-gray-500">
                     No providers found
                   </td>
                 </tr>

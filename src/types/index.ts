@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+
 // User Types
 export interface User {
   uid: string;
@@ -62,6 +64,7 @@ export interface Provider {
   description: string;
   website?: string; // Optional website field
   phoneNumber?: string; // Optional phone number field
+  excludeFromReports?: boolean; // Whether to exclude this provider from reports
   createdAt: Date;
 }
 

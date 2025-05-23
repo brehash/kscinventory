@@ -114,13 +114,14 @@ const Sidebar: React.FC = () => {
   // Common sidebar content
   const sidebarContent = (
     <>
-      <div className="flex items-center justify-between p-4 border-b border-gray-900">
+      <div className="flex items-center justify-between p-4 border-b border-gray-700">
         {!collapsed && (
-          <div className="font-bold text-xl">Inventory Pro</div>
+          <div className="font-bold text-xl text-white">Inventory Pro</div>
         )}
         <button 
           onClick={() => setCollapsed(!collapsed)}
-          className="p-1 rounded-md hover:bg-gray-700 transition-colors hidden md:block"
+          className="p-1.5 rounded-md hover:bg-gray-700 transition-colors hidden md:flex items-center justify-center text-white"
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           {collapsed ? 
             <ChevronRight className="h-5 w-5" /> : 
@@ -129,14 +130,15 @@ const Sidebar: React.FC = () => {
         </button>
         <button 
           onClick={toggleMobileSidebar}
-          className="p-1 rounded-md bg-gradient-to-r hover:from-bg-indigo-700 hover:to-bg-gray-900 transition-colors md:hidden"
+          className="p-1.5 rounded-md hover:bg-gray-700 transition-colors md:hidden text-white"
+          aria-label="Close sidebar"
         >
           <X className="h-5 w-5" />
         </button>
       </div>
       
-      <div className="flex-1 py-4">
-        <ul className="space-y-2 px-2">
+      <div className="flex-1 py-4 overflow-y-auto">
+        <ul className="space-y-2 px-3">
           {navItems.map((item) => (
             // Only show nav items the user has permission to see
             currentUser && item.roles.includes(currentUser.role) && (
@@ -150,16 +152,18 @@ const Sidebar: React.FC = () => {
                     to={item.path}
                     onClick={() => setMobileOpen(false)}
                     className={({ isActive }) => 
-                      `flex items-center p-2 rounded-md ${
-                        isActive ? 'bg-indigo-600 text-white' : 'text-black hover:text-blue-600 hover:bg-gray-300'
-                      } transition-colors`
+                      `flex items-center px-3 py-2.5 rounded-lg ${
+                        isActive 
+                          ? 'bg-indigo-600 text-white' 
+                          : 'text-gray-300 hover:text-blue-400 hover:bg-gray-700'
+                      } transition-all duration-200`
                     }
                   >
                     <span className="flex-shrink-0">{item.icon}</span>
-                    {!collapsed && <span className="ml-3">{item.name}</span>}
+                    {!collapsed && <span className="ml-3 font-medium">{item.name}</span>}
                   </NavLink>
                   {collapsed && hoveredItem === item.name && (
-                    <div className="absolute left-12 top-1/2 -translate-y-1/2 bg-gray-200 text-black text-xs rounded py-1 px-2 z-10 whitespace-nowrap">
+                    <div className="absolute z-10 left-12 top-1/2 -translate-y-1/2 bg-gray-800 text-white text-sm rounded-md py-1.5 px-3 whitespace-nowrap shadow-lg">
                       {item.name}
                     </div>
                   )}
@@ -170,10 +174,10 @@ const Sidebar: React.FC = () => {
         </ul>
       </div>
       
-      <div className="p-4 border-t border-gray-900">
+      <div className="p-4 border-t border-gray-700">
         {!collapsed && currentUser && (
           <div className="mb-4 px-2">
-            <div className="font-medium">{currentUser.displayName}</div>
+            <div className="font-medium text-white">{currentUser.displayName}</div>
             <div className="text-xs text-indigo-300 capitalize">{currentUser.role}</div>
           </div>
         )}
@@ -184,13 +188,13 @@ const Sidebar: React.FC = () => {
         >
           <button
             onClick={handleLogout}
-            className="flex items-center p-2 w-full rounded-md text-black hover:text-blue-600 hover:bg-gray-300 transition-colors"
+            className="flex items-center w-full px-3 py-2.5 rounded-lg text-gray-300 hover:text-blue-400 hover:bg-gray-700 transition-all duration-200"
           >
             <LogOut className="h-5 w-5" />
-            {!collapsed && <span className="ml-3">Logout</span>}
+            {!collapsed && <span className="ml-3 font-medium">Logout</span>}
           </button>
           {collapsed && hoveredItem === "Logout" && (
-            <div className="absolute left-12 top-1/2 -translate-y-1/2 bg-gray-200 text-black text-xs rounded py-1 px-2 z-10">
+            <div className="absolute z-10 left-12 top-1/2 -translate-y-1/2 bg-gray-800 text-white text-sm rounded-md py-1.5 px-3 whitespace-nowrap shadow-lg">
               Logout
             </div>
           )}
@@ -202,10 +206,11 @@ const Sidebar: React.FC = () => {
   return (
     <>
       {/* Mobile menu button */}
-      <div className="md:hidden absolute top-3 left-1 z-20">
+      <div className="md:hidden absolute top-3 left-3 z-20">
         <button
           onClick={toggleMobileSidebar}
-          className="p-2 rounded-md bg-gray-200 text-black"
+          className="p-2 rounded-md bg-gray-200 text-gray-800 hover:bg-gray-300 transition-colors"
+          aria-label="Open sidebar"
         >
           <Menu className="h-5 w-5" />
         </button>
@@ -213,7 +218,7 @@ const Sidebar: React.FC = () => {
 
       {/* Desktop sidebar */}
       <div 
-        className={`h-screen bg-gray-400 text-black flex-col transition-all duration-300 hidden md:flex ${
+        className={`h-screen bg-gray-800 text-white flex-col transition-all duration-300 hidden md:flex ${
           collapsed ? 'md:w-16' : 'md:w-64'
         }`}
       >
@@ -230,7 +235,7 @@ const Sidebar: React.FC = () => {
 
       {/* Mobile sidebar */}
       <div 
-        className={`fixed inset-y-0 left-0 z-40 w-64 bg-gray-400 text-black flex flex-col md:hidden transform transition-transform duration-300 ease-in-out ${
+        className={`fixed inset-y-0 left-0 z-40 w-64 bg-gray-800 text-white flex flex-col md:hidden transform transition-transform duration-300 ease-in-out ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >

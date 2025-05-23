@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Filter, AlertTriangle, Calendar } from 'lucide-react';
+import { Search, Filter, RefreshCw, AlertTriangle, Calendar } from 'lucide-react';
 import { OrderStatus } from '../../types';
 
 interface OrderFiltersProps {

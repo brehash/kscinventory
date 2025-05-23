@@ -150,8 +150,8 @@ const Sidebar: React.FC = () => {
                     to={item.path}
                     onClick={() => setMobileOpen(false)}
                     className={({ isActive }) => 
-                      `flex items-center p-2 bg-gradient-to-r rounded-md ${
-                        isActive ? 'from-pink-500 to-indigo-700 text-white' : 'text-white hover:from-pink-500 hover:to-transparent'
+                      `flex items-center p-2 rounded-md ${
+                        isActive ? 'bg-indigo-600 text-white' : 'text-black hover:text-blue-600 hover:bg-gray-300'
                       } transition-colors`
                     }
                   >
@@ -184,7 +184,7 @@ const Sidebar: React.FC = () => {
         >
           <button
             onClick={handleLogout}
-            className="flex items-center p-2 w-full rounded-md text-black hover:bg-indigo-700 transition-colors"
+            className="flex items-center p-2 w-full rounded-md text-black hover:text-blue-600 hover:bg-gray-300 transition-colors"
           >
             <LogOut className="h-5 w-5" />
             {!collapsed && <span className="ml-3">Logout</span>}

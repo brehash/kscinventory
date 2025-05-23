@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc, collection, getDocs, query, orderBy, where, updateDoc, addDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, query, orderBy, where, updateDoc, addDoc, limit } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { 
   Order, 
@@ -20,7 +20,11 @@ import {
   History,
   ChevronDown,
   ChevronUp,
-  ArrowRightLeft
+  ArrowRightLeft,
+  AlertTriangle,
+  Loader2,
+  RefreshCw,
+  Check
 } from 'lucide-react';
 import PriceHistoryTable from './PriceHistoryTable';
 import ProductActivityLog from '../activity/ProductActivityLog';

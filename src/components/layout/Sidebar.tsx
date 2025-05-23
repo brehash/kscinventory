@@ -213,7 +213,7 @@ const Sidebar: React.FC = () => {
 
       {/* Desktop sidebar */}
       <div 
-        className={`h-screen bg-gray-200 text-black flex-col transition-all duration-300 hidden md:flex ${
+        className={`h-screen bg-gray-400 text-black flex-col transition-all duration-300 hidden md:flex ${
           collapsed ? 'md:w-16' : 'md:w-64'
         }`}
       >
@@ -230,7 +230,7 @@ const Sidebar: React.FC = () => {
 
       {/* Mobile sidebar */}
       <div 
-        className={`fixed inset-y-0 left-0 z-40 w-64 bg-gray-200 text-black flex flex-col md:hidden transform transition-transform duration-300 ease-in-out ${
+        className={`fixed inset-y-0 left-0 z-40 w-64 bg-gray-400 text-black flex flex-col md:hidden transform transition-transform duration-300 ease-in-out ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, Fragment } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Search, 
@@ -16,6 +16,7 @@ import {
   Truck,
   ArrowDown,
   ArrowUp,
+  RefreshCw
 } from 'lucide-react';
 import { 
   collection, 
@@ -36,6 +37,7 @@ import {
 } from '../../types';
 import { useAuth } from '../auth/AuthProvider';
 import { logActivity } from '../../utils/activityLogger';
+import { updateWooCommerceProductStock } from '../../utils/wooCommerceProductSync';
 
 interface SearchModalProps {
   isOpen: boolean;
@@ -50,6 +52,7 @@ type SearchResult = {
   description?: string;
   quantity?: number;
   minQuantity?: number;
+  wooCommerceId?: number;
 };
 
 // Define mode type
@@ -190,6 +193,8 @@ const ProductQuantity: React.FC<{
   decrementQuantity: () => void;
   resetQuantity: () => void;
   getQuantityLabel: () => string;
+  wooSyncStatus: { success: boolean, message?: string, error?: string } | null;
+  isSyncing: boolean;
 }> = ({ 
   mode, 
   productToUpdate, 
@@ -199,7 +204,9 @@ const ProductQuantity: React.FC<{
   incrementQuantity,
   decrementQuantity,
   resetQuantity,
-  getQuantityLabel
+  getQuantityLabel,
+  wooSyncStatus,
+  isSyncing
 }) => {
   return (
     <div className="mt-3 sm:mt-4">
@@ -217,6 +224,43 @@ const ProductQuantity: React.FC<{
               You are about to decrease the inventory by {productToUpdate.quantity - newQuantity} units.
               {productToUpdate.quantity - newQuantity > productToUpdate.quantity && (
                 <span className="font-semibold"> Warning: This will result in negative inventory!</span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* WooCommerce Status */}
+      {productToUpdate.wooCommerceId && (
+        <div className={`p-2 rounded-md text-xs mb-2 ${
+          isSyncing ? 'bg-blue-50 text-blue-800' : 
+          wooSyncStatus ? 
+            (wooSyncStatus.success ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800') :
+            'bg-gray-50 text-gray-800'
+        }`}>
+          <div className="flex items-start">
+            <div className="mr-1.5 mt-0.5">
+              {isSyncing ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : wooSyncStatus ? (
+                wooSyncStatus.success ? (
+                  <Check className="h-3 w-3" />
+                ) : (
+                  <AlertCircle className="h-3 w-3" />
+                )
+              ) : (
+                <RefreshCw className="h-3 w-3" />
+              )}
+            </div>
+            <div>
+              {isSyncing ? (
+                "Syncing with WooCommerce..."
+              ) : wooSyncStatus ? (
+                wooSyncStatus.success ? 
+                  "Stock successfully synced with WooCommerce" : 
+                  `WooCommerce sync failed: ${wooSyncStatus.error}`
+              ) : (
+                `This product is linked to WooCommerce (ID: ${productToUpdate.wooCommerceId}). Stock will be synced automatically.`
               )}
             </div>
           </div>
@@ -432,6 +476,11 @@ const SearchResultsList: React.FC<{
                       Qty: {result.quantity}
                     </span>
                   )}
+                  {result.wooCommerceId && (
+                    <span className="bg-green-100 text-green-800 px-1.5 py-0.5 rounded-full">
+                      WC: #{result.wooCommerceId}
+                    </span>
+                  )}
                 </div>
               )}
             </div>
@@ -516,6 +565,16 @@ const ProductDetailView: React.FC<{
               <span className="font-medium text-gray-500">Min quantity:</span>{' '}
               <span className="font-semibold text-gray-900">{productToUpdate.minQuantity}</span>
             </div>
+            
+            {/* Show WooCommerce status if linked */}
+            {productToUpdate.wooCommerceId && (
+              <div className="col-span-2 mt-1">
+                <span className="font-medium text-gray-500">WooCommerce:</span>{' '}
+                <span className="font-semibold text-green-600">
+                  Linked (ID: {productToUpdate.wooCommerceId})
+                </span>
+              </div>
+            )}
             
             {/* Show location in shipping/receiving modes */}
             {(mode === 'shipping' || mode === 'receiving') && (
@@ -632,6 +691,10 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [showProductModal, setShowProductModal] = useState(false);
   
+  // WooCommerce sync state
+  const [wooSyncStatus, setWooSyncStatus] = useState<{success: boolean, message?: string, error?: string} | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  
   // Mode selection state
   const [mode, setMode] = useState<ModalMode>('inventory');
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -688,6 +751,8 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
     setStatusMessage(null);
     setIsProductNotFound(false);
     setScannedBarcode('');
+    setWooSyncStatus(null);
+    setIsSyncing(false);
     if (searchInputRef.current) {
       searchInputRef.current.value = '';
     }
@@ -825,7 +890,8 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
           barcode: product.barcode,
           description: product.description,
           quantity: product.quantity,
-          minQuantity: product.minQuantity
+          minQuantity: product.minQuantity,
+          wooCommerceId: product.wooCommerceId
         });
       } else {
         // Check if this looks like a barcode scan (could be numeric only, alphanumeric, etc.)
@@ -852,7 +918,8 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
               barcode: product.barcode,
               description: product.description,
               quantity: product.quantity,
-              minQuantity: product.minQuantity
+              minQuantity: product.minQuantity,
+              wooCommerceId: product.wooCommerceId
             });
           }
         });
@@ -1083,6 +1150,8 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
     if (!productToProcess || !currentUser) return;
     
     setIsUpdating(true);
+    setWooSyncStatus(null);
+    
     try {
       const productRef = doc(db, 'products', productToProcess.id);
       
@@ -1122,6 +1191,19 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
         currentUser,
         mode === 'inventory' ? quantityToSet : quantityChange
       );
+      
+      // Sync with WooCommerce if the product has a WooCommerce ID
+      if (productToProcess.wooCommerceId) {
+        setIsSyncing(true);
+        
+        const syncResult = await updateWooCommerceProductStock(
+          productToProcess,
+          quantityToSet
+        );
+        
+        setWooSyncStatus(syncResult);
+        setIsSyncing(false);
+      }
       
       // Set success message
       let successMessage = '';
@@ -1327,6 +1409,8 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
                   decrementQuantity={decrementQuantity}
                   resetQuantity={resetQuantity}
                   getQuantityLabel={getQuantityLabel}
+                  wooSyncStatus={wooSyncStatus}
+                  isSyncing={isSyncing}
                 />
               }
             />

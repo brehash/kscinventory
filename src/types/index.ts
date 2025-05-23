@@ -29,6 +29,7 @@ export interface Product {
   cost?: number; // Optional cost price
   lastCost?: number; // For price change tracking
   vatPercentage: number; // VAT percentage
+  wooCommerceId?: number; // WooCommerce product ID for syncing
   createdAt: Date;
   updatedAt: Date;
 }

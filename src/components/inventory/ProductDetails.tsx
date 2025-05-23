@@ -1,11 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc, collection, getDocs, query, orderBy, where, updateDoc, addDoc, limit } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, query, orderBy, where, updateDoc, addDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
-import { Product, ProductCategory, ProductType, Location, Provider, PriceHistory } from '../../types';
+import { 
+  Order, 
+  OrderItem, 
+  Address, 
+  OrderStatus, 
+  Product
+} from '../../types';
 import { 
   ArrowLeft, 
-  AlertTriangle, 
   Edit, 
   ShoppingBag, 
   Globe, 
@@ -24,6 +29,7 @@ import ProductForm from './ProductForm';
 import MoveItemModal from './MoveItemModal';
 import { useAuth } from '../auth/AuthProvider';
 import { logActivity } from '../../utils/activityLogger';
+import { updateWooCommerceProductStock } from '../../utils/wooCommerceProductSync';
 
 const ProductDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -39,6 +45,8 @@ const ProductDetails: React.FC = () => {
   const [showPriceHistory, setShowPriceHistory] = useState(false);
   const [recentPriceChange, setRecentPriceChange] = useState<PriceHistory | null>(null);
   const [hasPriceHistory, setHasPriceHistory] = useState(false);
+  const [wooSyncStatus, setWooSyncStatus] = useState<{success: boolean, message?: string, error?: string} | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
   
   // Add state for edit modal
   const [showEditModal, setShowEditModal] = useState(false);
@@ -182,14 +190,39 @@ const ProductDetails: React.FC = () => {
       );
       
       // Update the product in the local state
-      setProduct({
-        ...product,
-        ...updatedProduct
-      });
+      const updatedProductFull = { 
+        ...product, 
+        ...updatedProduct 
+      } as Product;
+      
+      setProduct(updatedProductFull);
+      
+      // If quantity changed, sync with WooCommerce
+      if (productData.quantity !== undefined && 
+          productData.quantity !== product.quantity &&
+          updatedProductFull.wooCommerceId) {
+        
+        setIsSyncing(true);
+        
+        // Sync with WooCommerce
+        const syncResult = await updateWooCommerceProductStock(
+          updatedProductFull,
+          productData.quantity
+        );
+        
+        setWooSyncStatus(syncResult);
+        setIsSyncing(false);
+        
+        // Clear sync status after 5 seconds
+        setTimeout(() => {
+          setWooSyncStatus(null);
+        }, 5000);
+      }
       
       setShowEditModal(false);
     } catch (error) {
       console.error('Error updating product:', error);
+      setError('Failed to update product. Please try again.');
     }
   };
 
@@ -208,6 +241,7 @@ const ProductDetails: React.FC = () => {
           ...productDoc.data() 
         } as Product;
         
+        // Update local state
         setProduct(updatedProductData);
         
         // Refresh location data if it changed
@@ -220,9 +254,59 @@ const ProductDetails: React.FC = () => {
             } as Location);
           }
         }
+        
+        // Sync with WooCommerce if needed
+        if (updatedProductData.wooCommerceId) {
+          setIsSyncing(true);
+          
+          const syncResult = await updateWooCommerceProductStock(
+            updatedProductData,
+            updatedProductData.quantity
+          );
+          
+          setWooSyncStatus(syncResult);
+          setIsSyncing(false);
+          
+          // Clear sync status after 5 seconds
+          setTimeout(() => {
+            setWooSyncStatus(null);
+          }, 5000);
+        }
       }
     } catch (err) {
       console.error('Error refreshing product details after move:', err);
+      setError('Failed to refresh product details');
+    }
+  };
+
+  // Handle manual sync with WooCommerce
+  const handleSyncWithWooCommerce = async () => {
+    if (!product || !product.wooCommerceId) {
+      setWooSyncStatus({
+        success: false,
+        error: 'Product is not linked to WooCommerce'
+      });
+      return;
+    }
+    
+    setIsSyncing(true);
+    
+    try {
+      const result = await updateWooCommerceProductStock(product, product.quantity);
+      setWooSyncStatus(result);
+      
+      // Clear sync status after 5 seconds
+      setTimeout(() => {
+        setWooSyncStatus(null);
+      }, 5000);
+    } catch (error) {
+      console.error('Error syncing with WooCommerce:', error);
+      setWooSyncStatus({
+        success: false,
+        error: 'An error occurred during sync'
+      });
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -302,6 +386,36 @@ const ProductDetails: React.FC = () => {
         </div>
       </div>
       
+      {/* WooCommerce sync status */}
+      {wooSyncStatus && (
+        <div className={`mb-4 p-4 rounded-md ${
+          wooSyncStatus.success ? 'bg-green-50 border border-green-100' : 'bg-red-50 border border-red-100'
+        }`}>
+          <div className="flex items-start">
+            {wooSyncStatus.success ? (
+              <Check className="h-5 w-5 text-green-500 mt-0.5 mr-2" />
+            ) : (
+              <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5 mr-2" />
+            )}
+            <div>
+              <h3 className={`font-medium ${
+                wooSyncStatus.success ? 'text-green-800' : 'text-red-800'
+              }`}>
+                {wooSyncStatus.success ? 'Stock synchronized with WooCommerce' : 'Stock sync failed'}
+              </h3>
+              <p className={`mt-1 text-sm ${
+                wooSyncStatus.success ? 'text-green-600' : 'text-red-600'
+              }`}>
+                {wooSyncStatus.message || wooSyncStatus.error || 
+                  (wooSyncStatus.success 
+                    ? `Updated WooCommerce product #${product.wooCommerceId} to ${product.quantity} units` 
+                    : 'Unable to update WooCommerce stock')}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="bg-white rounded-lg shadow-sm overflow-hidden">
         <div className="p-4 sm:p-6 border-b border-gray-200">
           <h2 className="text-base sm:text-lg font-semibold text-gray-800 mb-3 sm:mb-4">Basic Information</h2>
@@ -326,6 +440,35 @@ const ProductDetails: React.FC = () => {
               <h3 className="text-xs font-medium text-gray-500 uppercase mb-1">Location</h3>
               <p className="text-xs sm:text-sm text-gray-900">{location?.name || 'Unknown'}</p>
             </div>
+            {/* WooCommerce info */}
+            {product.wooCommerceId && (
+              <div className="sm:col-span-2">
+                <h3 className="text-xs font-medium text-gray-500 uppercase mb-1">WooCommerce</h3>
+                <div className="flex items-center justify-between">
+                  <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                    Linked to WooCommerce Product #{product.wooCommerceId}
+                  </span>
+                  
+                  <button
+                    onClick={handleSyncWithWooCommerce}
+                    disabled={isSyncing}
+                    className="inline-flex items-center text-xs px-2 py-1 bg-indigo-50 text-indigo-700 rounded-md hover:bg-indigo-100"
+                  >
+                    {isSyncing ? (
+                      <>
+                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                        Syncing...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="h-3 w-3 mr-1" />
+                        Sync Stock Now
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
         
@@ -386,7 +529,7 @@ const ProductDetails: React.FC = () => {
                 </p>
               </div>
               {product.quantity <= product.minQuantity && (
-                <p className="text-xs text-amber-500 mt-1">
+                <p className="mt-1 text-xs text-amber-500">
                   Below minimum quantity ({product.minQuantity})
                 </p>
               )}

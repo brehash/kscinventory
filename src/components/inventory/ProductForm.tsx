@@ -5,6 +5,7 @@ import { Product, ProductCategory, ProductType, Location, Provider } from '../..
 import { Plus, X, Loader2 } from 'lucide-react';
 import { useAuth } from '../auth/AuthProvider';
 import { logActivity } from '../../utils/activityLogger';
+import { findWooCommerceProductBySKU } from '../../utils/wooCommerceProductSync';
 
 interface ProductFormProps {
   initialData?: Partial<Product>;
@@ -29,6 +30,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, onSubmit, onCanc
     price: initialData?.price !== undefined ? initialData.price : 0,
     cost: initialData?.cost !== undefined ? initialData.cost : 0,
     vatPercentage: initialData?.vatPercentage !== undefined ? initialData.vatPercentage : 19,
+    wooCommerceId: initialData?.wooCommerceId || undefined,
   });
   
   const [categories, setCategories] = useState<ProductCategory[]>([]);
@@ -36,6 +38,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, onSubmit, onCanc
   const [locations, setLocations] = useState<Location[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
+  const [checkingWooCommerce, setCheckingWooCommerce] = useState(false);
   
   // Inline creation form visibility states
   const [showCategoryForm, setShowCategoryForm] = useState(false);
@@ -84,6 +87,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, onSubmit, onCanc
         price: initialData.price !== undefined ? initialData.price : formData.price,
         cost: initialData.cost !== undefined ? initialData.cost : formData.cost,
         vatPercentage: initialData.vatPercentage !== undefined ? initialData.vatPercentage : formData.vatPercentage,
+        wooCommerceId: initialData.wooCommerceId !== undefined ? initialData.wooCommerceId : formData.wooCommerceId,
       });
     }
   }, [initialData]);
@@ -159,6 +163,11 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, onSubmit, onCanc
         }
         
         setLoading(false);
+
+        // If adding a new product with a barcode, check for WooCommerce match
+        if (!initialData?.id && formData.barcode && !formData.wooCommerceId) {
+          checkForWooCommerceMatch(formData.barcode);
+        }
       } catch (error) {
         console.error('Error fetching form data:', error);
         setLoading(false);
@@ -167,6 +176,36 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, onSubmit, onCanc
     
     fetchData();
   }, []);
+
+  // Check for WooCommerce product match when barcode changes
+  useEffect(() => {
+    if (!initialData?.id && formData.barcode && !formData.wooCommerceId && !checkingWooCommerce) {
+      checkForWooCommerceMatch(formData.barcode);
+    }
+  }, [formData.barcode]);
+  
+  // Check if the barcode matches a WooCommerce product
+  const checkForWooCommerceMatch = async (barcode: string) => {
+    if (!barcode || checkingWooCommerce) return;
+    
+    try {
+      setCheckingWooCommerce(true);
+      
+      const wooCommerceId = await findWooCommerceProductBySKU(barcode);
+      
+      if (wooCommerceId) {
+        console.log(`Found matching WooCommerce product with ID: ${wooCommerceId}`);
+        setFormData(prev => ({
+          ...prev,
+          wooCommerceId
+        }));
+      }
+    } catch (error) {
+      console.error('Error checking for WooCommerce match:', error);
+    } finally {
+      setCheckingWooCommerce(false);
+    }
+  };
   
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -513,14 +552,31 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, onSubmit, onCanc
           <label htmlFor="barcode" className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
             Barcode
           </label>
-          <input
-            type="text"
-            id="barcode"
-            name="barcode"
-            value={formData.barcode || ''}
-            onChange={handleChange}
-            className="block w-full px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-          />
+          <div className="relative">
+            <input
+              type="text"
+              id="barcode"
+              name="barcode"
+              value={formData.barcode || ''}
+              onChange={handleChange}
+              className="block w-full px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+            />
+            {checkingWooCommerce && (
+              <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                <Loader2 className="h-4 w-4 animate-spin text-indigo-500" />
+              </div>
+            )}
+            {formData.wooCommerceId && (
+              <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                <span className="px-2 py-0.5 text-xs bg-green-100 text-green-800 rounded-full">
+                  WC Linked
+                </span>
+              </div>
+            )}
+          </div>
+          {checkingWooCommerce && (
+            <p className="mt-1 text-xs text-blue-500">Checking for WooCommerce match...</p>
+          )}
         </div>
         
         <div>
@@ -890,7 +946,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, onSubmit, onCanc
                     onChange={handleProviderChange}
                     className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                   />
-                  <label htmlFor="excludeFromReports" className="ml-2 text-xs text-gray-700">
+                  <label htmlFor="excludeFromReports" className="ml-2 block text-xs text-gray-700">
                     Exclude from reports
                   </label>
                 </div>
@@ -1005,6 +1061,19 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, onSubmit, onCanc
           />
         </div>
       </div>
+
+      {/* WooCommerce ID display */}
+      {formData.wooCommerceId && (
+        <div className="bg-indigo-50 p-2 rounded-md border border-indigo-100">
+          <p className="text-xs text-indigo-800 flex items-center">
+            <LinkIcon className="h-3.5 w-3.5 mr-1.5" />
+            This product is linked to WooCommerce product ID: {formData.wooCommerceId}
+          </p>
+          <p className="text-xs text-indigo-600 mt-1">
+            Stock changes will automatically sync with your WooCommerce store.
+          </p>
+        </div>
+      )}
       
       <div>
         <label htmlFor="description" className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">

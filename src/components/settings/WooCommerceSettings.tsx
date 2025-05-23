@@ -11,11 +11,14 @@ import {
   Lock,
   RefreshCw,
   Download,
-  ListPlus
+  ListPlus,
+  Layers,
+  Database
 } from 'lucide-react';
 import { syncWooCommerceOrders } from '../../utils/wooCommerceSync';
 import { useAuth } from '../auth/AuthProvider';
 import Modal from '../ui/Modal';
+import WooCommerceProductMapping from './WooCommerceProductMapping';
 
 // WooCommerce API client
 import WooCommerceRestApi from '@woocommerce/woocommerce-rest-api';
@@ -39,6 +42,9 @@ const WooCommerceSettings: React.FC = () => {
   const [showSyncModal, setShowSyncModal] = useState<boolean>(false);
   const [syncInProgress, setSyncInProgress] = useState<boolean>(false);
   const [syncResult, setSyncResult] = useState<any>(null);
+  
+  // Tab state
+  const [activeTab, setActiveTab] = useState<'settings' | 'products'>('settings');
   
   // Progress indicator state
   const [syncProgress, setSyncProgress] = useState<{
@@ -261,13 +267,13 @@ const WooCommerceSettings: React.FC = () => {
    * Get progress message based on current sync progress
    */
   const getProgressMessage = () => {
-    const { totalFound, processed, stage } = syncProgress;
+    const { totalFound, processed, stage, currentOrderNumber } = syncProgress;
     
     switch (stage) {
       case 'finding':
         return 'Finding orders from WooCommerce...';
       case 'processing':
-        return `Found ${totalFound} orders. Syncing ${processed} of ${totalFound}...`;
+        return `Found ${totalFound} orders. Syncing ${processed} of ${totalFound}${currentOrderNumber ? ` (Order #${currentOrderNumber})` : ''}...`;
       case 'complete':
         return `Synced ${processed} of ${totalFound} orders successfully.`;
       default:
@@ -350,87 +356,140 @@ const WooCommerceSettings: React.FC = () => {
           </div>
         </div>
       )}
-      
-      <div className="bg-white rounded-lg shadow-sm">
-        <div className="p-6">
-          <div className="grid grid-cols-1 gap-6">
-            <div className="space-y-1">
-              <label htmlFor="wc_url" className="block text-sm font-medium text-gray-700">
-                <Globe className="h-4 w-4 inline-block mr-1.5" />
-                Store URL
-              </label>
-              <input
-                type="url"
-                id="wc_url"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                placeholder="https://your-store.com"
-              />
-              <p className="text-xs text-gray-500">
-                Your WooCommerce store URL (e.g., https://example.com)
-              </p>
-            </div>
-            
-            <div className="space-y-1">
-              <label htmlFor="wc_consumer_key" className="block text-sm font-medium text-gray-700">
-                <Key className="h-4 w-4 inline-block mr-1.5" />
-                Consumer Key
-              </label>
-              <input
-                type="text"
-                id="wc_consumer_key"
-                value={consumerKey}
-                onChange={(e) => setConsumerKey(e.target.value)}
-                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                placeholder="ck_xxxxxxxxxxxxxxxxxxxx"
-              />
-              <p className="text-xs text-gray-500">
-                Your WooCommerce API Consumer Key
-              </p>
-            </div>
-            
-            <div className="space-y-1">
-              <label htmlFor="wc_consumer_secret" className="block text-sm font-medium text-gray-700">
-                <Lock className="h-4 w-4 inline-block mr-1.5" />
-                Consumer Secret
-              </label>
-              <input
-                type="password"
-                id="wc_consumer_secret"
-                value={consumerSecret}
-                onChange={(e) => setConsumerSecret(e.target.value)}
-                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                placeholder="cs_xxxxxxxxxxxxxxxxxxxx"
-              />
-              <p className="text-xs text-gray-500">
-                Your WooCommerce API Consumer Secret
-              </p>
-            </div>
-            
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={checkConnection}
-                disabled={connectionStatus === 'checking'}
-                className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-              >
-                {connectionStatus === 'checking' ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Checking Connection...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Check Connection
-                  </>
-                )}
-              </button>
+
+      {/* Tabs */}
+      <div className="border-b border-gray-200 mb-4">
+        <nav className="-mb-px flex space-x-8">
+          <button
+            onClick={() => setActiveTab('settings')}
+            className={`${
+              activeTab === 'settings'
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+          >
+            API Settings
+          </button>
+          <button
+            onClick={() => setActiveTab('products')}
+            className={`${
+              activeTab === 'products'
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
+          >
+            <Layers className="h-4 w-4 mr-1.5" />
+            Product Mapping
+          </button>
+        </nav>
+      </div>
+
+      {activeTab === 'settings' && (
+        <div className="bg-white rounded-lg shadow-sm">
+          <div className="p-6">
+            <div className="grid grid-cols-1 gap-6">
+              <div className="space-y-1">
+                <label htmlFor="wc_url" className="block text-sm font-medium text-gray-700">
+                  <Globe className="h-4 w-4 inline-block mr-1.5" />
+                  Store URL
+                </label>
+                <input
+                  type="url"
+                  id="wc_url"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  placeholder="https://your-store.com"
+                />
+                <p className="text-xs text-gray-500">
+                  Your WooCommerce store URL (e.g., https://example.com)
+                </p>
+              </div>
+              
+              <div className="space-y-1">
+                <label htmlFor="wc_consumer_key" className="block text-sm font-medium text-gray-700">
+                  <Key className="h-4 w-4 inline-block mr-1.5" />
+                  Consumer Key
+                </label>
+                <input
+                  type="text"
+                  id="wc_consumer_key"
+                  value={consumerKey}
+                  onChange={(e) => setConsumerKey(e.target.value)}
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  placeholder="ck_xxxxxxxxxxxxxxxxxxxx"
+                />
+                <p className="text-xs text-gray-500">
+                  Your WooCommerce API Consumer Key
+                </p>
+              </div>
+              
+              <div className="space-y-1">
+                <label htmlFor="wc_consumer_secret" className="block text-sm font-medium text-gray-700">
+                  <Lock className="h-4 w-4 inline-block mr-1.5" />
+                  Consumer Secret
+                </label>
+                <input
+                  type="password"
+                  id="wc_consumer_secret"
+                  value={consumerSecret}
+                  onChange={(e) => setConsumerSecret(e.target.value)}
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  placeholder="cs_xxxxxxxxxxxxxxxxxxxx"
+                />
+                <p className="text-xs text-gray-500">
+                  Your WooCommerce API Consumer Secret
+                </p>
+              </div>
+              
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={checkConnection}
+                  disabled={connectionStatus === 'checking'}
+                  className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                >
+                  {connectionStatus === 'checking' ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Checking Connection...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Check Connection
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
+      
+      {activeTab === 'products' && (
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          {connectionStatus === 'connected' ? (
+            <WooCommerceProductMapping />
+          ) : (
+            <div className="text-center py-10">
+              <Database className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Connect to WooCommerce First</h3>
+              <p className="text-sm text-gray-500 max-w-md mx-auto mb-6">
+                You need to establish a connection to your WooCommerce store before 
+                you can map products for stock synchronization.
+              </p>
+              <button
+                onClick={() => setActiveTab('settings')}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                <Globe className="h-4 w-4 mr-1.5" />
+                Go to API Settings
+              </button>
+            </div>
+          )}
+        </div>
+      )}
       
       <div className="mt-6 bg-gray-50 p-4 sm:p-6 rounded-lg border border-gray-200">
         <div className="flex items-start space-x-4">
@@ -457,6 +516,7 @@ const WooCommerceSettings: React.FC = () => {
               <h4 className="text-sm font-medium text-gray-700 mb-2">Required permissions:</h4>
               <ul className="space-y-1 text-xs text-gray-700 list-disc list-inside">
                 <li>Read access to Products</li>
+                <li>Write access to Products (for stock updates)</li>
                 <li>Read/Write access to Orders</li>
                 <li>Read access to System Status</li>
               </ul>
@@ -533,7 +593,7 @@ const WooCommerceSettings: React.FC = () => {
                       <RefreshCw className="h-3.5 w-3.5 mr-1" />
                       Updated orders: {syncResult.updatedOrders}
                     </p>
-                    
+
                     {syncResult.ordersWithUnidentifiedItems > 0 && (
                       <p className="flex items-center text-amber-600">
                         <AlertTriangle className="h-3.5 w-3.5 mr-1" />

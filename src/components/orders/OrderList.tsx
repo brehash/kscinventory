@@ -124,10 +124,6 @@ const OrderList: React.FC = () => {
         filters.push(where('source', '==', selectedSource));
       }
       
-      if (showUnidentifiedOnly) {
-        filters.push(where('hasUnidentifiedItems', '==', true));
-      }
-      
       // Date range filters
       if (startDate) {
         const startTimestamp = Timestamp.fromDate(new Date(startDate));
@@ -141,6 +137,9 @@ const OrderList: React.FC = () => {
         const endTimestamp = Timestamp.fromDate(endDateObj);
         filters.push(where('orderDate', '<=', endTimestamp));
       }
+      
+      // Remove the hasUnidentifiedItems filter from the initial query to avoid the composite index error
+      // We'll filter these results in memory after fetching
       
       // Search filter (only if query is provided)
       if (searchQuery) {
@@ -161,8 +160,6 @@ const OrderList: React.FC = () => {
       // Get total count for pagination
       const countSnapshot = await getCountFromServer(baseQuery);
       const totalCount = countSnapshot.data().count;
-      setTotalOrders(totalCount);
-      setPageCount(Math.ceil(totalCount / itemsPerPage));
       
       // Apply sorting and pagination
       let ordersQuery;
@@ -225,11 +222,23 @@ const OrderList: React.FC = () => {
         );
       }
       
+      // Apply the hasUnidentifiedItems filter client-side if needed
+      if (showUnidentifiedOnly) {
+        ordersData = ordersData.filter(order => order.hasUnidentifiedItems === true);
+      }
+      
+      // Update total count based on client-side filtering
+      const filteredTotalCount = showUnidentifiedOnly 
+        ? ordersData.length // This is not accurate for the total, but will be improved once the index is created
+        : totalCount;
+      
+      setTotalOrders(filteredTotalCount);
+      setPageCount(Math.ceil(filteredTotalCount / itemsPerPage));
       setOrders(ordersData);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching orders:', error);
-      setError('Failed to load orders. Please try again.');
+      setError('Failed to load orders. Please try again. If this error persists, a Firebase index may need to be created. Please contact your administrator.');
       setLoading(false);
     }
   };

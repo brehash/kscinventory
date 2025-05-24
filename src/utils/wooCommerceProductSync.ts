@@ -1,34 +1,40 @@
 import WooCommerceRestApi from '@woocommerce/woocommerce-rest-api';
 import { Product } from '../types';
 
-// Initialize WooCommerce API with stored credentials
+/**
+ * Initializes the WooCommerce API client with stored credentials.
+ *
+ * @returns A WooCommerceRestApi instance configured with the stored credentials.
+ */
 const initWooCommerceAPI = () => {
-  // Get settings from localStorage
+  // Get settings from localStorage.
   const url = localStorage.getItem('wc_url') || '';
   const consumerKey = localStorage.getItem('wc_consumer_key') || '';
   const consumerSecret = localStorage.getItem('wc_consumer_secret') || '';
   
-  return new WooCommerceRestApi({
+  const wooCommerceConfig = {
     url,
     consumerKey,
     consumerSecret,
     version: 'wc/v3'
-  });
+  };
+  
+  return new WooCommerceRestApi(wooCommerceConfig);
 };
 
 /**
- * Update product stock quantity in WooCommerce
- * 
- * @param product The product to update
- * @param quantity The new quantity value
- * @returns Object with success status and optional error message
+ * Update product stock quantity in WooCommerce.
+ *
+ * @param product The product to update.
+ * @param quantity The new quantity value.
+ * @returns Object with success status and optional error message.
  */
 export const updateWooCommerceProductStock = async (
   product: Product,
   quantity: number
 ): Promise<{ success: boolean; error?: string }> => {
   try {
-    // Check if the product has a WooCommerce ID
+    // Check if the product has a WooCommerce ID.
     if (!product.wooCommerceId) {
       return { 
         success: false, 
@@ -36,7 +42,7 @@ export const updateWooCommerceProductStock = async (
       };
     }
     
-    // Check if WooCommerce credentials are set
+    // Check if WooCommerce credentials are set.
     if (!localStorage.getItem('wc_url') || 
         !localStorage.getItem('wc_consumer_key') || 
         !localStorage.getItem('wc_consumer_secret')) {
@@ -46,10 +52,10 @@ export const updateWooCommerceProductStock = async (
       };
     }
     
-    // Initialize WooCommerce API
+    // Initialize WooCommerce API.
     const api = initWooCommerceAPI();
     
-    // Update product stock quantity in WooCommerce
+    // Update product stock quantity in WooCommerce.
     const response = await api.put(`products/${product.wooCommerceId}`, {
       stock_quantity: quantity,
       manage_stock: true
@@ -73,10 +79,10 @@ export const updateWooCommerceProductStock = async (
 };
 
 /**
- * Find a WooCommerce product by SKU and return its ID
- * 
- * @param sku The product SKU (barcode) to search for
- * @returns The WooCommerce product ID if found, null otherwise
+ * Find a WooCommerce product by SKU and return its ID.
+ *
+ * @param sku The product SKU (barcode) to search for.
+ * @returns The WooCommerce product ID if found, null otherwise.
  */
 export const findWooCommerceProductBySKU = async (
   sku: string
@@ -84,7 +90,7 @@ export const findWooCommerceProductBySKU = async (
   if (!sku) return null;
   
   try {
-    // Check if WooCommerce credentials are set
+    // Check if WooCommerce credentials are set.
     if (!localStorage.getItem('wc_url') || 
         !localStorage.getItem('wc_consumer_key') || 
         !localStorage.getItem('wc_consumer_secret')) {
@@ -92,10 +98,10 @@ export const findWooCommerceProductBySKU = async (
       return null;
     }
     
-    // Initialize WooCommerce API
+    // Initialize WooCommerce API.
     const api = initWooCommerceAPI();
     
-    // Search for product by SKU
+    // Search for product by SKU.
     const response = await api.get('products', {
       sku: sku
     });

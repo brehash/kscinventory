@@ -14,7 +14,10 @@ import { db } from '../config/firebase';
 import { Order, User, OrderStatus, UnidentifiedItem, Product, Client, Address } from '../types';
 import { logActivity } from './activityLogger';
 
-// Initialize WooCommerce API
+/**
+ * Initialize WooCommerce API
+ * Creates and returns a configured WooCommerceRestApi instance using credentials from localStorage
+ */
 const initWooCommerceAPI = () => {
   // Get settings from localStorage
   const url = localStorage.getItem('wc_url') || '';
@@ -31,7 +34,10 @@ const initWooCommerceAPI = () => {
   return new WooCommerceRestApi(wooCommerceConfig);
 };
 
-// Test WooCommerce connection with provided credentials
+/**
+ * Test WooCommerce Connection
+ * Validates the provided WooCommerce API credentials by attempting to connect to the store
+ */
 export const testWooCommerceConnection = async (
   url: string,
   consumerKey: string,
@@ -84,7 +90,10 @@ export const testWooCommerceConnection = async (
   }
 };
 
-// Map WooCommerce order status to internal status
+/**
+ * Map WooCommerce order status to internal status
+ * Converts WooCommerce status strings to the equivalent internal OrderStatus enum values
+ */
 const mapOrderStatus = (wcStatus: string): OrderStatus => {
   // console.log(`Mapping WooCommerce status: ${wcStatus}`);
   
@@ -140,7 +149,10 @@ const mapOrderStatus = (wcStatus: string): OrderStatus => {
   }
 };
 
-// Map internal order status to WooCommerce status
+/**
+ * Map internal order status to WooCommerce status
+ * Converts our internal OrderStatus enum values to WooCommerce status strings
+ */
 const mapInternalStatusToWooCommerce = (status: OrderStatus): string => {
   console.log(`Mapping internal status to WooCommerce: ${status}`);
   
@@ -183,7 +195,10 @@ const mapInternalStatusToWooCommerce = (status: OrderStatus): string => {
   }
 };
 
-// Update order status on WooCommerce
+/**
+ * Update order status on WooCommerce
+ * Synchronizes an order status change from our system to WooCommerce
+ */
 export const updateOrderStatusOnWooCommerce = async (
   woocommerceId: number,
   status: OrderStatus
@@ -231,7 +246,10 @@ export const updateOrderStatusOnWooCommerce = async (
   }
 };
 
-// Find product in Firestore by barcode (WooCommerce SKU)
+/**
+ * Find product in Firestore by barcode (WooCommerce SKU)
+ * Searches the products collection to find a product matching the provided SKU
+ */
 const findProductByBarcode = async (sku: string): Promise<Product | null> => {
   if (!sku) return null;
   
@@ -257,18 +275,23 @@ const findProductByBarcode = async (sku: string): Promise<Product | null> => {
 
 /**
  * Create or update a client from WooCommerce order data
+ * Synchronizes customer data from WooCommerce orders to the CRM system
  * 
  * @param customerName The customer's full name
  * @param email The customer's email address
  * @param phone The customer's phone number
  * @param billingAddress The customer's billing address
+ * @param orderId The current order ID being processed
+ * @param woocommerceOrderId The WooCommerce ID of the order being processed
  * @returns The client ID of the created or updated client
  */
 const createOrUpdateClient = async (
   customerName: string,
   email: string,
   phone?: string,
-  billingAddress?: Address
+  billingAddress?: Address,
+  orderId?: string, 
+  woocommerceOrderId?: number
 ): Promise<string | null> => {
   try {
     if (!email) {
@@ -286,7 +309,7 @@ const createOrUpdateClient = async (
     if (clientSnapshot.empty) {
       // console.log(`No client found with email ${email}, creating new client`);
       
-      // Create new client
+      // Create new client with orderIds array
       const newClient: Omit<Client, 'id'> = {
         name: customerName,
         email: email,
@@ -300,7 +323,8 @@ const createOrUpdateClient = async (
         source: 'woocommerce',
         createdAt: new Date(),
         updatedAt: new Date(),
-        createdBy: 'system' // Since this is automated
+        createdBy: 'system', // Since this is automated
+        orderIds: orderId ? [orderId] : [] // Initialize with the current order ID if provided
       };
       
       const clientDocRef = await addDoc(clientsRef, newClient);
@@ -333,8 +357,21 @@ const createOrUpdateClient = async (
         updates.address = billingAddress;
       }
       
-      // Always increment totalOrders
-      updates.totalOrders = (existingClient.totalOrders || 0) + 1;
+      // Initialize orderIds array if it doesn't exist
+      if (!existingClient.orderIds) {
+        updates.orderIds = [];
+      }
+      
+      // Add the current order ID to the orderIds array if provided and not already included
+      if (orderId && (!existingClient.orderIds || !existingClient.orderIds.includes(orderId))) {
+        updates.orderIds = [...(existingClient.orderIds || []), orderId];
+      }
+      
+      // Only increment totalOrders if we're adding a new order to orderIds
+      const hasNewOrder = orderId && (!existingClient.orderIds || !existingClient.orderIds.includes(orderId));
+      if (hasNewOrder) {
+        updates.totalOrders = (existingClient.totalOrders || 0) + 1;
+      }
       
       await updateDoc(doc(db, 'clients', clientId), updates);
       // console.log(`Updated existing client ${clientId} from WooCommerce order`);
@@ -349,13 +386,22 @@ const createOrUpdateClient = async (
 
 /**
  * Update client order statistics after order processing
+ * Calculates and updates total spent, average order value and other client statistics
+ * Now checks if order has already been processed to prevent duplicate counting
  * 
  * @param clientId The client ID to update
  * @param orderTotal The total amount of the order
+ * @param orderId The order ID being processed
+ * @param woocommerceOrderId The WooCommerce ID of the order being processed
  */
-const updateClientOrderStats = async (clientId: string | null, orderTotal: number): Promise<void> => {
+const updateClientOrderStats = async (
+  clientId: string | null, 
+  orderTotal: number, 
+  orderId?: string,
+  woocommerceOrderId?: number
+): Promise<void> => {
   try {
-    if (!clientId) return;
+    if (!clientId || !orderId) return;
 
     const clientRef = doc(db, 'clients', clientId);
     const clientDoc = await getDoc(clientRef);
@@ -363,46 +409,50 @@ const updateClientOrderStats = async (clientId: string | null, orderTotal: numbe
     if (clientDoc.exists()) {
       const clientData = clientDoc.data() as Client;
       
+      // Initialize orderIds array if it doesn't exist
+      const orderIds = clientData.orderIds || [];
+      
+      // Check if this order has already been processed to prevent double-counting
+      if (orderIds.includes(orderId)) {
+        console.log(`Order ${orderId} already processed for client ${clientId}, skipping revenue update`);
+        return;
+      }
+      
       // Get existing values
       const existingTotalSpent = clientData.totalSpent || 0;
-      const existingAverageOrderValue = clientData.averageOrderValue || 0;
+      const existingTotalOrders = clientData.totalOrders || 0;
       
       // Calculate new values
-      const totalOrders = clientData.totalOrders || 0; // Should already be incremented
       const newTotalSpent = existingTotalSpent + orderTotal;
-      const newAverageOrderValue = totalOrders > 0 ? newTotalSpent / totalOrders : 0;
+      const newTotalOrders = existingTotalOrders; // No need to increment here, done in createOrUpdateClient
+      const newAverageOrderValue = newTotalOrders > 0 ? newTotalSpent / newTotalOrders : 0;
       const newLastOrderDate = new Date();
       
-      // Create update object, only including fields that changed
-      const updates: Partial<Client> = {};
+      // Add this order to the client's orderIds
+      const newOrderIds = [...orderIds, orderId];
       
-      // Check if values changed and add to updates object if they did
-      if (newTotalSpent !== existingTotalSpent) {
-        updates.totalSpent = newTotalSpent;
-      }
+      // Create update object with all fields that need to be updated
+      const updates: Partial<Client> = {
+        totalSpent: newTotalSpent,
+        averageOrderValue: newAverageOrderValue,
+        lastOrderDate: newLastOrderDate,
+        orderIds: newOrderIds,
+        updatedAt: new Date()
+      };
       
-      if (Math.abs(newAverageOrderValue - existingAverageOrderValue) > 0.01) {
-        // Using a small epsilon for floating-point comparison
-        updates.averageOrderValue = newAverageOrderValue;
-      }
-      
-      // Always update last order date
-      updates.lastOrderDate = newLastOrderDate;
-      
-      // Only update if there are changes to make
-      if (Object.keys(updates).length > 0) {
-        await updateDoc(clientRef, updates);
-        console.log(`Updated client ${clientId} order statistics. Changes: ${Object.keys(updates).join(', ')}`);
-      } else {
-        console.log(`No changes needed for client ${clientId} order statistics`);
-      }
+      // Update client in Firestore
+      await updateDoc(clientRef, updates);
+      console.log(`Updated client ${clientId} order statistics for order ${orderId}. New total: ${newTotalSpent.toFixed(2)} RON`);
     }
   } catch (error) {
     console.error('Error updating client order statistics:', error);
   }
 };
 
-// Convert WooCommerce order to internal Order format
+/**
+ * Convert WooCommerce order to internal Order format
+ * Transforms a WooCommerce order object into our system's Order format
+ */
 const convertWooCommerceOrder = async (wcOrder: any): Promise<Omit<Order, 'id'>> => {
   // console.log(`Converting WooCommerce order: #${wcOrder.number} (ID: ${wcOrder.id}) - Status: ${wcOrder.status}`);
   
@@ -509,27 +559,7 @@ const convertWooCommerceOrder = async (wcOrder: any): Promise<Omit<Order, 'id'>>
   //   emailValue: wcOrder.billing?.email || 'Not provided'
   // });
   
-  // Create or update client in CRM if email is available
-  let clientId: string | null = null; // Initialize as null instead of undefined
-  try {
-    if (wcOrder.billing?.email) {
-      // console.log(`Attempting to create/update client for order #${wcOrder.number}`);
-      clientId = await createOrUpdateClient(
-        customerName,
-        wcOrder.billing.email,
-        wcOrder.billing.phone || undefined,
-        billingAddress
-      );
-      
-      // console.log(`Client process result for order #${wcOrder.number}: clientId=${clientId || 'null'}`);
-    } else {
-      console.log(`No email available for order #${wcOrder.number}, skipping client creation`);
-    }
-  } catch (clientError) {
-    console.error(`Error during client creation for order #${wcOrder.number}:`, clientError);
-    clientId = null; // Ensure clientId is null on error
-  }
-  
+  // First create the order data structure without clientId
   const orderData: Omit<Order, 'id'> = {
     orderNumber: wcOrder.number,
     customerName,
@@ -552,26 +582,88 @@ const convertWooCommerceOrder = async (wcOrder: any): Promise<Omit<Order, 'id'>>
     createdAt: new Date(),
     updatedAt: new Date(),
     packingSlipPrinted: false,
-    clientId  // Will be null if no client was created/found
+    clientId: null  // Will be set after client creation/update
   };
   
-  // If clientId exists, update client's order statistics
-  if (clientId) {
-    try {
-      // console.log(`Updating order statistics for client ${clientId} with order total ${total}`);
-      await updateClientOrderStats(clientId, total);
-    } catch (statsError) {
-      console.error(`Error updating client order statistics for client ${clientId}:`, statsError);
-      // Error in updating stats doesn't affect the order creation
+  // Create or update client in CRM if email is available
+  let clientId: string | null = null; // Initialize as null instead of undefined
+  try {
+    if (wcOrder.billing?.email) {
+      // We need to pass orderId, but we don't have it yet
+      // We'll update the client with the order ID after creating the order
+      clientId = await createOrUpdateClient(
+        customerName,
+        wcOrder.billing.email,
+        wcOrder.billing.phone || undefined,
+        billingAddress
+      );
+      
+      // Set the clientId in the order data
+      if (clientId) {
+        orderData.clientId = clientId;
+      }
+    } else {
+      console.log(`No email available for order #${wcOrder.number}, skipping client creation`);
     }
-  } else {
-    console.log(`No clientId available for order #${wcOrder.number}, skipping order statistics update`);
+  } catch (clientError) {
+    console.error(`Error during client creation for order #${wcOrder.number}:`, clientError);
+    clientId = null; // Ensure clientId is null on error
   }
   
   return orderData;
 };
 
-// Sync WooCommerce orders
+/**
+ * Update client with order ID and update order statistics
+ * Called after an order is created to link the order to the client and update stats
+ * 
+ * @param clientId Client ID to update
+ * @param orderId The ID of the order in our system
+ * @param orderTotal Total amount of the order
+ * @param woocommerceOrderId The WooCommerce ID of the order
+ */
+const updateClientWithOrder = async (
+  clientId: string | null,
+  orderId: string,
+  orderTotal: number,
+  woocommerceOrderId?: number
+): Promise<void> => {
+  if (!clientId || !orderId) return;
+  
+  try {
+    const clientRef = doc(db, 'clients', clientId);
+    const clientDoc = await getDoc(clientRef);
+    
+    if (clientDoc.exists()) {
+      const clientData = clientDoc.data() as Client;
+      
+      // Initialize orderIds array if it doesn't exist
+      const orderIds = clientData.orderIds || [];
+      
+      // Check if this order has already been processed
+      if (!orderIds.includes(orderId)) {
+        // Add order ID to the client's orderIds array
+        const updates: Partial<Client> = {
+          orderIds: [...orderIds, orderId],
+          updatedAt: new Date()
+        };
+        
+        await updateDoc(clientRef, updates);
+        
+        // Now update the client's order statistics
+        await updateClientOrderStats(clientId, orderTotal, orderId, woocommerceOrderId);
+      }
+    }
+  } catch (error) {
+    console.error(`Error updating client with order ID ${orderId}:`, error);
+  }
+};
+
+/**
+ * Sync WooCommerce orders
+ * Main function to synchronize orders from WooCommerce to our system
+ * Now includes proper tracking of processed orders to prevent duplicate revenue counting
+ */
 export const syncWooCommerceOrders = async (currentUser: User) => {
   try {
     // console.log('Starting WooCommerce orders sync...');
@@ -648,15 +740,19 @@ export const syncWooCommerceOrders = async (currentUser: User) => {
           // Order doesn't exist, create it
           const newOrderData = await convertWooCommerceOrder(wcOrder);
           
-          // DEBUG: Check if the client was processed correctly
-          // console.log(`Client status for new order #${wcOrder.number}:`, {
-          //   clientId: newOrderData.clientId || 'No clientId',
-          //   customerEmail: newOrderData.customerEmail || 'No email',
-          //   customerName: newOrderData.customerName
-          // });
+          // Add to Firestore
+          const docRef = await addDoc(ordersRef, newOrderData);
+          const orderId = docRef.id;
           
-          // Track client updates
+          // Now that we have the orderId, update the client with this order ID
           if (newOrderData.clientId) {
+            await updateClientWithOrder(
+              newOrderData.clientId,
+              orderId,
+              newOrderData.total,
+              wcOrder.id
+            );
+            
             // Determine if this is a new client or updated client
             const clientRef = doc(db, 'clients', newOrderData.clientId);
             const clientDoc = await getDoc(clientRef);
@@ -673,8 +769,6 @@ export const syncWooCommerceOrders = async (currentUser: User) => {
           } else {
             console.log(`Order #${wcOrder.number} created without a clientId - client creation may have failed`);
           }
-          
-          const docRef = await addDoc(ordersRef, newOrderData);
           
           // Log the activity
           await logActivity(
@@ -705,26 +799,24 @@ export const syncWooCommerceOrders = async (currentUser: User) => {
           // Convert WooCommerce order to our format
           const newOrderData = await convertWooCommerceOrder(wcOrder);
           
-          // DEBUG: Check if the client was processed correctly for existing order
-          // console.log(`Client status for existing order #${wcOrder.number}:`, {
-          //   newClientId: newOrderData.clientId || 'No clientId',
-          //   existingClientId: existingOrderData.clientId || 'No clientId',
-          //   customerEmail: newOrderData.customerEmail || 'No email',
-          //   changeDetected: newOrderData.clientId !== existingOrderData.clientId
-          // });
-          
-          // Track client updates
+          // Check if client ID has changed and handle it appropriately
           if (newOrderData.clientId && newOrderData.clientId !== existingOrderData.clientId) {
-            // Client was added or changed
+            // Update client's order list to include this order if needed
+            await updateClientWithOrder(
+              newOrderData.clientId,
+              existingOrder.id,
+              newOrderData.total,
+              wcOrder.id
+            );
+            
+            // Track client updates
             const clientRef = doc(db, 'clients', newOrderData.clientId);
             const clientDoc = await getDoc(clientRef);
             if (clientDoc.exists()) {
               const clientData = clientDoc.data() as Client;
               if (clientData.totalOrders <= 1) {
-                // console.log(`New client detected for existing order: ${newOrderData.clientId}`);
                 newClients++;
               } else {
-                // console.log(`Updated client detected for existing order: ${newOrderData.clientId}`);
                 updatedClients++;
               }
             }
@@ -811,7 +903,10 @@ export const syncWooCommerceOrders = async (currentUser: User) => {
   }
 };
 
-// Create a script for scheduled sync (to be used with a cron job)
+/**
+ * WooCommerce sync script for scheduled sync
+ * A Node.js script version of the sync function that can be run as a cron job
+ */
 export const wooSyncScript = async () => {
   // This would be adapted to run from a Node.js script or Firebase Cloud Function
   try {
@@ -866,8 +961,16 @@ export const wooSyncScript = async () => {
         const newOrderData = await convertWooCommerceOrder(wcOrder);
         const orderDocRef = await addDoc(ordersRef, newOrderData);
         
-        // Track client statistics
+        // Now that we have the orderId, update the client with this order ID
         if (newOrderData.clientId) {
+          await updateClientWithOrder(
+            newOrderData.clientId,
+            orderDocRef.id,
+            newOrderData.total,
+            wcOrder.id
+          );
+          
+          // Track client statistics
           const clientRef = doc(db, 'clients', newOrderData.clientId);
           const clientDoc = await getDoc(clientRef);
           if (clientDoc.exists()) {
@@ -889,8 +992,16 @@ export const wooSyncScript = async () => {
         // Convert WooCommerce order to our format
         const newOrderData = await convertWooCommerceOrder(wcOrder);
         
-        // Track client updates
+        // Check if client ID has changed
         if (newOrderData.clientId && newOrderData.clientId !== existingOrderData.clientId) {
+          await updateClientWithOrder(
+            newOrderData.clientId,
+            existingOrder.id,
+            newOrderData.total,
+            wcOrder.id
+          );
+          
+          // Track client updates
           const clientRef = doc(db, 'clients', newOrderData.clientId);
           const clientDoc = await getDoc(clientRef);
           if (clientDoc.exists()) {

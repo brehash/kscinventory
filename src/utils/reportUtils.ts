@@ -702,6 +702,403 @@ export const exportProducts = async (
 };
 
 /**
+ * Exports custom report data based on provided field selection and filters.
+ *
+ * @param fields Array of field IDs to include in the export.
+ * @param format Export format (csv, xlsx, pdf, json).
+ * @param includeHeaders Whether to include column headers.
+ * @param filters Date range filters.
+ * @param currentUser The current authenticated user.
+ */
+export const exportCustom = async (
+  fields: string[],
+  format: ExportFormat,
+  includeHeaders = true,
+  filters: {
+    startDate: string;
+    endDate: string;
+  },
+  currentUser: User
+): Promise<void> => {
+  try {
+    // Determine which collections to query based on field prefixes
+    const productFields = fields.filter(field => field.startsWith('product_'));
+    const orderFields = fields.filter(field => field.startsWith('order_'));
+    const clientFields = fields.filter(field => field.startsWith('client_'));
+    
+    // Initialize data arrays
+    let productsData: any[] = [];
+    let ordersData: any[] = [];
+    let clientsData: any[] = [];
+    
+    // Convert date strings to Date objects for filters
+    const startDateObj = new Date(filters.startDate);
+    startDateObj.setHours(0, 0, 0, 0); // Start of day
+    
+    const endDateObj = new Date(filters.endDate);
+    endDateObj.setHours(23, 59, 59, 999); // End of day
+    
+    // Fetch data from required collections
+    if (productFields.length > 0) {
+      const productsRef = collection(db, 'products');
+      const productsSnapshot = await getDocs(productsRef);
+      
+      // Get related entity names
+      const [categories, locations, productTypes, providers] = await Promise.all([
+        getDocs(collection(db, 'categories')),
+        getDocs(collection(db, 'locations')),
+        getDocs(collection(db, 'productTypes')),
+        getDocs(collection(db, 'providers'))
+      ]);
+      
+      const categoryMap = new Map();
+      categories.docs.forEach(doc => categoryMap.set(doc.id, doc.data().name));
+      
+      const locationMap = new Map();
+      locations.docs.forEach(doc => locationMap.set(doc.id, doc.data().name));
+      
+      const typeMap = new Map();
+      productTypes.docs.forEach(doc => typeMap.set(doc.id, doc.data().name));
+      
+      const providerMap = new Map();
+      providers.docs.forEach(doc => providerMap.set(doc.id, doc.data().name));
+      
+      // Format product data
+      productsData = productsSnapshot.docs.map(doc => {
+        const product = doc.data() as Product;
+        return {
+          product_name: product.name,
+          product_barcode: product.barcode || '',
+          product_category: categoryMap.get(product.categoryId) || 'Unknown',
+          product_location: locationMap.get(product.locationId) || 'Unknown',
+          product_type: typeMap.get(product.typeId) || 'Unknown',
+          product_provider: product.providerId ? providerMap.get(product.providerId) || 'Unknown' : 'None',
+          product_quantity: product.quantity,
+          product_min_quantity: product.minQuantity,
+          product_cost: product.cost?.toFixed(2) || 'N/A',
+          product_price: product.price.toFixed(2),
+          product_vat: product.vatPercentage + '%',
+          product_total_value: ((product.cost || 0) * product.quantity).toFixed(2),
+          product_total_selling: (product.price * product.quantity).toFixed(2),
+          product_created_at: product.createdAt?.toDate().toLocaleDateString() || 'Unknown',
+          product_updated_at: product.updatedAt?.toDate().toLocaleDateString() || 'Unknown'
+        };
+      });
+    }
+    
+    if (orderFields.length > 0) {
+      const ordersRef = collection(db, 'orders');
+      let q = query(
+        ordersRef, 
+        where('orderDate', '>=', Timestamp.fromDate(startDateObj)),
+        where('orderDate', '<=', Timestamp.fromDate(endDateObj)),
+        orderBy('orderDate', 'desc')
+      );
+      
+      const ordersSnapshot = await getDocs(q);
+      
+      // Format order data
+      ordersData = ordersSnapshot.docs.map(doc => {
+        const order = doc.data() as Order;
+        return {
+          order_number: order.orderNumber,
+          order_date: order.orderDate?.toDate().toLocaleDateString() || 'Unknown',
+          order_customer: order.customerName,
+          order_email: order.customerEmail || '',
+          order_status: order.status,
+          order_subtotal: order.subtotal.toFixed(2),
+          order_shipping: order.shippingCost.toFixed(2),
+          order_tax: order.tax.toFixed(2),
+          order_total: order.total.toFixed(2),
+          order_payment_method: order.paymentMethod,
+          order_source: order.source,
+          order_shipping_address: `${order.shippingAddress?.street || ''}, ${order.shippingAddress?.city || ''}, ${order.shippingAddress?.postalCode || ''}`,
+          order_billing_address: `${order.billingAddress?.street || ''}, ${order.billingAddress?.city || ''}, ${order.billingAddress?.postalCode || ''}`,
+          order_items_count: order.items?.length || 0,
+          order_fulfilled_at: order.fulfilledAt?.toDate().toLocaleDateString() || 'Not fulfilled',
+          order_fulfilled_by: order.fulfilledBy || 'N/A'
+        };
+      });
+    }
+    
+    if (clientFields.length > 0) {
+      const clientsRef = collection(db, 'clients');
+      const clientsSnapshot = await getDocs(clientsRef);
+      
+      // Format client data
+      clientsData = clientsSnapshot.docs.map(doc => {
+        const client = doc.data() as Client;
+        return {
+          client_name: client.name,
+          client_email: client.email || '',
+          client_phone: client.phone || '',
+          client_company: client.company || '',
+          client_tax_id: client.taxId || '',
+          client_contact_person: client.contactPerson || '',
+          client_contact_role: client.contactRole || '',
+          client_address: `${client.address?.street || ''}, ${client.address?.city || ''}, ${client.address?.postalCode || ''}`,
+          client_tags: client.tags?.join(', ') || '',
+          client_status: client.active ? 'Active' : 'Inactive',
+          client_orders: client.orderCount || 0,
+          client_total_spent: client.totalSpent?.toFixed(2) || '0.00',
+          client_average_order: client.averageOrderValue?.toFixed(2) || '0.00',
+          client_last_order: client.lastOrderDate?.toDate().toLocaleDateString() || 'No orders',
+          client_created_at: client.createdAt?.toDate().toLocaleDateString() || 'Unknown',
+          client_source: client.source || 'Manual'
+        };
+      });
+    }
+    
+    // Prepare the exported data with only the selected fields
+    let exportData: any[] = [];
+    
+    if (productFields.length > 0 && !orderFields.length && !clientFields.length) {
+      // Only product fields
+      exportData = productsData.map(product => {
+        const filteredProduct: any = {};
+        productFields.forEach(field => {
+          if (product.hasOwnProperty(field)) {
+            filteredProduct[field] = product[field];
+          }
+        });
+        return filteredProduct;
+      });
+    } else if (orderFields.length > 0 && !productFields.length && !clientFields.length) {
+      // Only order fields
+      exportData = ordersData.map(order => {
+        const filteredOrder: any = {};
+        orderFields.forEach(field => {
+          if (order.hasOwnProperty(field)) {
+            filteredOrder[field] = order[field];
+          }
+        });
+        return filteredOrder;
+      });
+    } else if (clientFields.length > 0 && !productFields.length && !orderFields.length) {
+      // Only client fields
+      exportData = clientsData.map(client => {
+        const filteredClient: any = {};
+        clientFields.forEach(field => {
+          if (client.hasOwnProperty(field)) {
+            filteredClient[field] = client[field];
+          }
+        });
+        return filteredClient;
+      });
+    } else {
+      // Combined report (more complex)
+      // This is a simplified approach for demo purposes
+      // In a real app, you would need to establish relationships between entities
+      
+      if (productFields.length > 0) {
+        // Add products with selected fields
+        productsData.forEach(product => {
+          const filteredData: any = {};
+          fields.forEach(field => {
+            if (product.hasOwnProperty(field)) {
+              filteredData[field] = product[field];
+            }
+          });
+          exportData.push(filteredData);
+        });
+      }
+      
+      if (orderFields.length > 0) {
+        // Add orders with selected fields
+        ordersData.forEach(order => {
+          const filteredData: any = {};
+          fields.forEach(field => {
+            if (order.hasOwnProperty(field)) {
+              filteredData[field] = order[field];
+            }
+          });
+          exportData.push(filteredData);
+        });
+      }
+      
+      if (clientFields.length > 0) {
+        // Add clients with selected fields
+        clientsData.forEach(client => {
+          const filteredData: any = {};
+          fields.forEach(field => {
+            if (client.hasOwnProperty(field)) {
+              filteredData[field] = client[field];
+            }
+          });
+          exportData.push(filteredData);
+        });
+      }
+    }
+    
+    // Generate output based on requested format
+    let content: string | Blob;
+    let mimeType: string;
+    let fileName: string;
+    
+    // Handle empty data
+    if (exportData.length === 0) {
+      throw new Error('No data matches the selected criteria');
+    }
+    
+    // Create human-readable field names for headers
+    const fieldLabels: {[key: string]: string} = {
+      // Product fields
+      product_name: 'Product Name',
+      product_barcode: 'Barcode',
+      product_category: 'Category',
+      product_location: 'Location',
+      product_type: 'Product Type',
+      product_provider: 'Provider',
+      product_quantity: 'Quantity',
+      product_min_quantity: 'Min Quantity',
+      product_cost: 'Cost Price',
+      product_price: 'Selling Price',
+      product_vat: 'VAT',
+      product_total_value: 'Total Value',
+      product_total_selling: 'Total Selling Value',
+      product_created_at: 'Created Date',
+      product_updated_at: 'Last Updated',
+      
+      // Order fields
+      order_number: 'Order Number',
+      order_date: 'Order Date',
+      order_customer: 'Customer Name',
+      order_email: 'Customer Email',
+      order_status: 'Status',
+      order_subtotal: 'Subtotal',
+      order_shipping: 'Shipping Cost',
+      order_tax: 'Tax Amount',
+      order_total: 'Total',
+      order_payment_method: 'Payment Method',
+      order_source: 'Order Source',
+      order_shipping_address: 'Shipping Address',
+      order_billing_address: 'Billing Address',
+      order_items_count: 'Number of Items',
+      order_fulfilled_at: 'Fulfillment Date',
+      order_fulfilled_by: 'Fulfilled By',
+      
+      // Client fields
+      client_name: 'Client Name',
+      client_email: 'Email',
+      client_phone: 'Phone',
+      client_company: 'Company Name',
+      client_tax_id: 'Tax ID/VAT',
+      client_contact_person: 'Contact Person',
+      client_contact_role: 'Contact Role',
+      client_address: 'Address',
+      client_tags: 'Tags',
+      client_status: 'Status',
+      client_orders: 'Number of Orders',
+      client_total_spent: 'Total Spent',
+      client_average_order: 'Average Order Value',
+      client_last_order: 'Last Order Date',
+      client_created_at: 'Created Date',
+      client_source: 'Client Source'
+    };
+    
+    switch(format) {
+      case 'csv':
+        content = convertToCSV(exportData, includeHeaders);
+        mimeType = 'text/csv';
+        fileName = generateReportFilename('csv', 'custom-report');
+        break;
+        
+      case 'json':
+        content = JSON.stringify(exportData, null, 2);
+        mimeType = 'application/json';
+        fileName = generateReportFilename('json', 'custom-report');
+        break;
+        
+      case 'xlsx':
+        // Create Excel workbook
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(exportData);
+        
+        // Rename headers if needed
+        if (includeHeaders && ws['!ref']) {
+          const range = XLSX.utils.decode_range(ws['!ref']);
+          for (let C = range.s.c; C <= range.e.c; ++C) {
+            const cellAddress = XLSX.utils.encode_cell({r: 0, c: C});
+            if (ws[cellAddress] && ws[cellAddress].v && typeof ws[cellAddress].v === 'string') {
+              const fieldId = ws[cellAddress].v;
+              if (fieldLabels[fieldId]) {
+                ws[cellAddress].v = fieldLabels[fieldId];
+              }
+            }
+          }
+        }
+        
+        XLSX.utils.book_append_sheet(wb, ws, "Custom Report");
+        const xlsxData = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        content = new Blob([xlsxData], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        fileName = generateReportFilename('xlsx', 'custom-report');
+        break;
+        
+      case 'pdf':
+        // Create PDF document
+        const doc = new jsPDF();
+        doc.text('Custom Report', 14, 16);
+        doc.text(`Date Range: ${filters.startDate} to ${filters.endDate}`, 14, 22);
+        doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28);
+        
+        // Create table with readable column headers
+        const columns = fields.map(field => fieldLabels[field] || field);
+        const tableData = exportData.map(item => {
+          return fields.map(field => {
+            // Handle undefined values
+            return item[field] !== undefined ? String(item[field]) : '';
+          });
+        });
+        
+        (doc as any).autoTable({
+          startY: 35,
+          head: [columns],
+          body: tableData,
+          margin: { top: 35 },
+          styles: { overflow: 'linebreak' },
+          columnStyles: { text: { cellWidth: 'auto' } }
+        });
+        
+        content = doc.output('blob');
+        mimeType = 'application/pdf';
+        fileName = generateReportFilename('pdf', 'custom-report');
+        break;
+        
+      default:
+        throw new Error(`Unsupported export format: ${format}`);
+    }
+    
+    // Generate download
+    const blob = content instanceof Blob ? content : new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    
+    // Clean up
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    // Log activity
+    await logActivity(
+      'added',
+      'export',
+      new Date().getTime().toString(),
+      `Custom Report Export (${format.toUpperCase()})`,
+      currentUser
+    );
+    
+  } catch (error) {
+    console.error('Error exporting custom report:', error);
+    throw error;
+  }
+};
+
+/**
  * Converts a DOM element to an image using HTML2Canvas.
  *
  * @param element The DOM element to convert.

@@ -427,6 +427,207 @@ export const exportOrders = async (
 };
 
 /**
+ * Exports clients data based on provided filters.
+ *
+ * @param format Export format (csv, xlsx, pdf, json).
+ * @param includeHeaders Whether to include column headers.
+ * @param filters Filters to apply to the query.
+ * @param currentUser The current authenticated user.
+ */
+export const exportClients = async (
+  format: ExportFormat,
+  includeHeaders = true,
+  filters: {
+    status?: string;
+    tags?: string[];
+    minOrders?: number;
+    minSpent?: number;
+    startDate: string;
+    endDate: string;
+  },
+  currentUser: User
+): Promise<void> => {
+  try {
+    // Build the query based on filters
+    const clientsRef = collection(db, 'clients');
+    let q = query(clientsRef);
+    
+    // Apply filters
+    const queryFilters = [];
+    
+    if (filters.status) {
+      const isActive = filters.status === 'active';
+      queryFilters.push(where('active', '==', isActive));
+    }
+    
+    if (filters.tags && filters.tags.length > 0) {
+      // Firebase requires exact array match, so we need to do this filtering client-side
+      // We'll fetch all clients and filter later
+    }
+    
+    // Apply any query filters
+    if (queryFilters.length > 0) {
+      q = query(clientsRef, ...queryFilters);
+    }
+    
+    // Execute query and get clients
+    const snapshot = await getDocs(q);
+    let clientsData = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as Client[];
+    
+    // Apply client-side filters
+    if (filters.tags && filters.tags.length > 0) {
+      clientsData = clientsData.filter(client => {
+        if (!client.tags) return false;
+        return filters.tags!.some(tag => client.tags!.includes(tag));
+      });
+    }
+    
+    if (filters.minOrders !== undefined) {
+      clientsData = clientsData.filter(client => (client.orderCount || 0) >= filters.minOrders!);
+    }
+    
+    if (filters.minSpent !== undefined) {
+      clientsData = clientsData.filter(client => (client.totalSpent || 0) >= filters.minSpent!);
+    }
+    
+    // Filter by date range (for clients created within the range)
+    if (filters.startDate) {
+      const startDateObj = new Date(filters.startDate);
+      startDateObj.setHours(0, 0, 0, 0); // Start of day
+      clientsData = clientsData.filter(client => {
+        if (!client.createdAt) return false;
+        const createdDate = client.createdAt.toDate ? client.createdAt.toDate() : new Date(client.createdAt);
+        return createdDate >= startDateObj;
+      });
+    }
+    
+    if (filters.endDate) {
+      const endDateObj = new Date(filters.endDate);
+      endDateObj.setHours(23, 59, 59, 999); // End of day
+      clientsData = clientsData.filter(client => {
+        if (!client.createdAt) return false;
+        const createdDate = client.createdAt.toDate ? client.createdAt.toDate() : new Date(client.createdAt);
+        return createdDate <= endDateObj;
+      });
+    }
+    
+    // Format data for export
+    const exportData = clientsData.map(client => {
+      return {
+        name: client.name,
+        email: client.email || '',
+        phone: client.phone || '',
+        company: client.company || '',
+        taxId: client.taxId || '',
+        contactPerson: client.contactPerson || '',
+        contactRole: client.contactRole || '',
+        address: client.address ? `${client.address.street || ''}, ${client.address.city || ''}, ${client.address.postalCode || ''}` : '',
+        tags: client.tags ? client.tags.join(', ') : '',
+        status: client.active ? 'Active' : 'Inactive',
+        orderCount: client.orderCount || 0,
+        totalSpent: client.totalSpent ? client.totalSpent.toFixed(2) : '0.00',
+        averageOrderValue: client.averageOrderValue ? client.averageOrderValue.toFixed(2) : '0.00',
+        lastOrderDate: client.lastOrderDate ? client.lastOrderDate.toDate ? client.lastOrderDate.toDate().toLocaleDateString() : new Date(client.lastOrderDate).toLocaleDateString() : 'N/A',
+        createdAt: client.createdAt ? client.createdAt.toDate ? client.createdAt.toDate().toLocaleDateString() : new Date(client.createdAt).toLocaleDateString() : 'N/A',
+        source: client.source || 'Manual'
+      };
+    });
+    
+    // Generate output based on requested format
+    let content: string | Blob;
+    let mimeType: string;
+    let fileName: string;
+    
+    switch(format) {
+      case 'csv':
+        content = convertToCSV(exportData, includeHeaders);
+        mimeType = 'text/csv';
+        fileName = generateReportFilename('csv', 'clients');
+        break;
+        
+      case 'json':
+        content = JSON.stringify(exportData, null, 2);
+        mimeType = 'application/json';
+        fileName = generateReportFilename('json', 'clients');
+        break;
+        
+      case 'xlsx':
+        // Create Excel workbook
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(exportData, { header: Object.keys(exportData[0]) });
+        XLSX.utils.book_append_sheet(wb, ws, "Clients");
+        const xlsxData = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        content = new Blob([xlsxData], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        fileName = generateReportFilename('xlsx', 'clients');
+        break;
+        
+      case 'pdf':
+        // Create PDF document
+        const doc = new jsPDF();
+        doc.text('Clients Export', 14, 16);
+        doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 22);
+        
+        // Create table data for PDF
+        const tableData = exportData.map(client => [
+          client.name,
+          client.company || '',
+          client.phone || '',
+          client.email || '',
+          client.status,
+          client.orderCount.toString(),
+          client.totalSpent
+        ]);
+        
+        // Add table to PDF
+        (doc as any).autoTable({
+          startY: 30,
+          head: [['Name', 'Company', 'Phone', 'Email', 'Status', 'Orders', 'Total Spent']],
+          body: tableData,
+        });
+        
+        content = doc.output('blob');
+        mimeType = 'application/pdf';
+        fileName = generateReportFilename('pdf', 'clients');
+        break;
+        
+      default:
+        throw new Error(`Unsupported export format: ${format}`);
+    }
+    
+    // Generate download
+    const blob = content instanceof Blob ? content : new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    
+    // Clean up
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    // Log activity
+    await logActivity(
+      'added',
+      'export',
+      new Date().getTime().toString(),
+      `Clients Export (${format.toUpperCase()})`,
+      currentUser
+    );
+    
+  } catch (error) {
+    console.error('Error exporting clients:', error);
+    throw error;
+  }
+};
+
+/**
  * Exports products data based on provided filters.
  *
  * @param format Export format (csv, xlsx, pdf, json).

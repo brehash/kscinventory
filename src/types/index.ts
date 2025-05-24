@@ -264,6 +264,7 @@ export interface Client {
   updatedAt: Date;
   createdBy: string;
   updatedBy?: string;
+  orderIds?: string[]; // Added to track processed order IDs
 }
 
 export interface ClientNote {

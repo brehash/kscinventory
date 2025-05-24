@@ -576,7 +576,7 @@ const convertWooCommerceOrder = async (wcOrder: any): Promise<Omit<Order, 'id'>>
     tax,
     total,
     paymentMethod: wcOrder.payment_method || 'other',
-    notes: wcOrder.customer_note || null,
+    notes: wcOrder.customer_note || undefined,
     source: 'woocommerce',
     woocommerceId: wcOrder.id,
     createdAt: new Date(),
@@ -799,7 +799,7 @@ export const syncWooCommerceOrders = async (currentUser: User) => {
           // Convert WooCommerce order to our format
           const newOrderData = await convertWooCommerceOrder(wcOrder);
           
-          // Check if client ID has changed and handle it appropriately
+          // Check if client ID has changed
           if (newOrderData.clientId && newOrderData.clientId !== existingOrderData.clientId) {
             // Update client's order list to include this order if needed
             await updateClientWithOrder(
@@ -881,6 +881,63 @@ export const syncWooCommerceOrders = async (currentUser: User) => {
           // Continue with next order rather than failing the entire sync
         }
       }
+    }
+    
+    // Calculate actual total revenue from all clients after synchronization
+    try {
+      const clientsRef = collection(db, 'clients');
+      const clientsSnapshot = await getDocs(clientsRef);
+      
+      let totalClientOrders = 0;
+      let totalClientRevenue = 0;
+      
+      // Loop through all clients and recalculate their totals from their actual orders
+      for (const clientDoc of clientsSnapshot.docs) {
+        const clientId = clientDoc.id;
+        const client = clientDoc.data() as Client;
+        
+        // Skip clients without orderIds
+        if (!client.orderIds || client.orderIds.length === 0) {
+          continue;
+        }
+        
+        // Get all orders for this client
+        let clientOrderTotal = 0;
+        let clientOrderCount = 0;
+        
+        // Process each order ID
+        for (const orderId of client.orderIds) {
+          try {
+            const orderDoc = await getDoc(doc(db, 'orders', orderId));
+            if (orderDoc.exists()) {
+              const order = orderDoc.data() as Order;
+              clientOrderTotal += order.total;
+              clientOrderCount++;
+            }
+          } catch (orderError) {
+            console.error(`Error fetching order ${orderId} for client ${clientId}:`, orderError);
+          }
+        }
+        
+        // Update client with recalculated values
+        if (clientOrderCount > 0) {
+          const updates: Partial<Client> = {
+            totalOrders: clientOrderCount,
+            totalSpent: clientOrderTotal,
+            averageOrderValue: clientOrderTotal / clientOrderCount,
+            updatedAt: new Date()
+          };
+          
+          await updateDoc(doc(db, 'clients', clientId), updates);
+          
+          totalClientOrders += clientOrderCount;
+          totalClientRevenue += clientOrderTotal;
+        }
+      }
+      
+      console.log(`Recalculated client statistics: Total ${totalClientOrders} orders, Total revenue ${totalClientRevenue.toFixed(2)} RON`);
+    } catch (recalcError) {
+      console.error('Error recalculating client statistics:', recalcError);
     }
     
     console.log(`Sync completed: ${newOrders} new orders, ${updatedOrders} updated orders, ${ordersWithUnidentifiedItems} orders with unidentified items`);
@@ -1047,6 +1104,48 @@ export const wooSyncScript = async () => {
           updatedOrders++;
         }
       }
+    }
+    
+    // Recalculate client statistics from their actual orders
+    try {
+      const clientsRef = collection(db, 'clients');
+      const clientsSnapshot = await getDocs(clientsRef);
+      
+      for (const clientDoc of clientsSnapshot.docs) {
+        const clientId = clientDoc.id;
+        const client = clientDoc.data() as Client;
+        
+        // Skip clients without orderIds
+        if (!client.orderIds || client.orderIds.length === 0) {
+          continue;
+        }
+        
+        // Get all orders for this client
+        let clientOrderTotal = 0;
+        let clientOrderCount = 0;
+        
+        // Process each order ID
+        for (const orderId of client.orderIds) {
+          const orderDoc = await getDoc(doc(db, 'orders', orderId));
+          if (orderDoc.exists()) {
+            const order = orderDoc.data() as Order;
+            clientOrderTotal += order.total;
+            clientOrderCount++;
+          }
+        }
+        
+        // Update client with recalculated values
+        if (clientOrderCount > 0) {
+          await updateDoc(doc(db, 'clients', clientId), {
+            totalOrders: clientOrderCount,
+            totalSpent: clientOrderTotal,
+            averageOrderValue: clientOrderTotal / clientOrderCount,
+            updatedAt: new Date()
+          });
+        }
+      }
+    } catch (recalcError) {
+      console.error('Error recalculating client statistics:', recalcError);
     }
     
     console.log(`WooCommerce sync completed: ${newOrders} new orders, ${updatedOrders} updated orders`);

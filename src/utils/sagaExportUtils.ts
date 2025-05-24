@@ -4,9 +4,10 @@ import { Product, ActivityLog, User } from '../types';
 import { logActivity } from './activityLogger';
 
 /**
- * Converts a Date to a string in the format expected by SAGA (dd.mm.yyyy)
- * @param date The Date to format
- * @returns A string in the format dd.mm.yyyy
+ * Converts a Date to a string in the format expected by SAGA (dd.mm.yyyy).
+ *
+ * @param date The Date to format.
+ * @returns A string in the format dd.mm.yyyy.
  */
 const formatDateForSaga = (date: Date): string => {
   const day = String(date.getDate()).padStart(2, '0');
@@ -16,8 +17,9 @@ const formatDateForSaga = (date: Date): string => {
 };
 
 /**
- * Fetches all products from the database
- * @returns An array of products
+ * Fetches all products from the database.
+ *
+ * @returns An array of products.
  */
 const fetchAllProducts = async (): Promise<Product[]> => {
   try {
@@ -35,14 +37,15 @@ const fetchAllProducts = async (): Promise<Product[]> => {
 };
 
 /**
- * Fetches product activity logs for the specified date range
- * @param startDate The start date of the range (ISO string)
- * @param endDate The end date of the range (ISO string)
- * @returns An array of activity logs
+ * Fetches product activity logs for the specified date range.
+ *
+ * @param startDate The start date of the range (ISO string).
+ * @param endDate The end date of the range (ISO string).
+ * @returns An array of activity logs.
  */
 const fetchProductActivities = async (startDate: string, endDate: string): Promise<ActivityLog[]> => {
   try {
-    // Convert ISO date strings to Date objects
+    // Convert ISO date strings to Date objects.
     const startDateObj = new Date(startDate);
     startDateObj.setHours(0, 0, 0, 0); // Start of day
     
@@ -72,11 +75,12 @@ const fetchProductActivities = async (startDate: string, endDate: string): Promi
 };
 
 /**
- * Generates a SAGA-compatible CSV export for inventory
- * @param startDate The start date of the period (ISO string)
- * @param endDate The end date of the period (ISO string)
- * @param currentUser The current user initiating the export
- * @returns The export data as a string
+ * Generates a SAGA-compatible CSV export for inventory.
+ *
+ * @param startDate The start date of the period (ISO string).
+ * @param endDate The end date of the period (ISO string).
+ * @param currentUser The current user initiating the export.
+ * @returns The export data as a string.
  */
 export const generateSagaExport = async (
   startDate: string,
@@ -84,17 +88,17 @@ export const generateSagaExport = async (
   currentUser: User
 ): Promise<{ data: string; count: number }> => {
   try {
-    // Fetch all products
+    // Fetch all products.
     const products = await fetchAllProducts();
     
-    // Fetch all product activity logs for the period
+    // Fetch all product activity logs for the period.
     const activities = await fetchProductActivities(startDate, endDate);
     
-    // Create a map to quickly look up products by ID
+    // Create a map to quickly look up products by ID.
     const productMap = new Map<string, Product>();
     products.forEach(product => productMap.set(product.id, product));
     
-    // Calculate product quantities at the start and end of the period
+    // Calculate product quantities at the start and end of the period.
     const productMovements = new Map<string, {
       productId: string;
       productName: string;
@@ -104,7 +108,7 @@ export const generateSagaExport = async (
       finalQuantity: number;
     }>();
     
-    // Initialize product movements with current quantities (final quantities)
+    // Initialize product movements with current quantities (final quantities).
     products.forEach(product => {
       productMovements.set(product.id, {
         productId: product.id,
@@ -116,31 +120,31 @@ export const generateSagaExport = async (
       });
     });
     
-    // Process activities to calculate initial quantities
+    // Process activities to calculate initial quantities.
     activities.forEach(activity => {
       const movement = productMovements.get(activity.entityId);
       if (!movement) return;
       
-      // Adjust initial quantity based on the activity
+      // Adjust initial quantity based on the activity.
       if (activity.type === 'added' && activity.quantity) {
         movement.initialQuantity -= activity.quantity;
       } else if (activity.type === 'removed' && activity.quantity) {
         movement.initialQuantity += activity.quantity;
       }
-      // 'updated' activities with a quantity don't affect the calculation as they're absolute values, not deltas
+      // 'updated' activities with a quantity don't affect the calculation as they're absolute values, not deltas.
     });
     
-    // Convert to SAGA CSV format
+    // Convert to SAGA CSV format.
     let csvData = '';
     
-    // Add CSV headers
+    // Add CSV headers.
     csvData += 'Cod;Denumire;UM;Categorie;Cantitate initiala;Valoare initiala;Cantitate finala;Valoare finala\r\n';
     
-    // Add product rows
+    // Add product rows.
     let productCount = 0;
     productMovements.forEach(movement => {
       if (movement.initialQuantity < 0) {
-        // SAGA can't handle negative initial quantities, so adjust for this case
+        // SAGA can't handle negative initial quantities, so adjust for this case.
         console.warn(`Product ${movement.productName} has negative initial quantity (${movement.initialQuantity}). Setting to 0.`);
         movement.initialQuantity = 0;
       }
@@ -148,12 +152,12 @@ export const generateSagaExport = async (
       const initialValue = movement.initialQuantity * movement.costPrice;
       const finalValue = movement.finalQuantity * movement.costPrice;
       
-      // Skip products with no movement if initial and final quantities are 0
+      // Skip products with no movement if initial and final quantities are 0.
       if (movement.initialQuantity === 0 && movement.finalQuantity === 0) {
         return;
       }
       
-      // Format for SAGA - fields are separated by semicolons
+      // Format for SAGA - fields are separated by semicolons.
       csvData += `${movement.productId.substring(0, 10)};`; // Cod - limit to 10 characters
       csvData += `${movement.productName};`; // Denumire
       csvData += 'BUC;'; // UM (unit of measure) - "BUC" is standard for pieces in Romania
@@ -166,12 +170,12 @@ export const generateSagaExport = async (
       productCount++;
     });
     
-    // If no products, add a message in the CSV
+    // If no products, add a message in the CSV.
     if (productCount === 0) {
       csvData += 'Nu exista produse pentru exportat in perioada selectata.;;;;;;\r\n';
     }
     
-    // Log the activity
+    // Log the activity.
     await logActivity(
       'added',
       'export', // New entity type

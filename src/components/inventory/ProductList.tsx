@@ -211,14 +211,11 @@ const ProductList: React.FC = () => {
     }
   }, [searchQuery, selectedCategory, selectedLocation, selectedProvider, sortField, sortDirection]);
 
-  // Handle search manually with 3 char minimum
-  const handleSearchChange = (query: string) => {
-    // Always allow empty string (for clearing search)
-    if (query === '' || query.length >= 3) {
-      setSearchQuery(query);
-    }
+  // Handle search query changes
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
   };
-  
+
   const handleSort = (field: keyof Product) => {
     if (field === sortField) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
@@ -247,7 +244,7 @@ const ProductList: React.FC = () => {
       
       // Log the activity
       await logActivity(
-        'added', 
+        'added',
         'product', 
         docRef.id, 
         productData.name || 'New Product', 
@@ -474,7 +471,7 @@ const ProductList: React.FC = () => {
         {/* Filter controls */}
         <ProductListFilters 
           searchQuery={searchQuery}
-          setSearchQuery={handleSearchChange}
+          setSearchQuery={handleSearch}
           selectedCategory={selectedCategory}
           setSelectedCategory={setSelectedCategory}
           selectedLocation={selectedLocation}

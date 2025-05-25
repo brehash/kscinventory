@@ -222,8 +222,7 @@ const ProductList: React.FC = () => {
         console.log("SearchQuery:", searchQuery)
         const lowerCaseQuery = searchQuery.toLowerCase();
         productsData = productsData.filter(product => 
-          (product.name?.toLowerCase() || '').includes(lowerCaseQuery) ||
-          (product.barcode?.toLowerCase() || '').includes(lowerCaseQuery)
+          (product.name?.toLowerCase() || '').includes(lowerCaseQuery)
         );
         console.log("resulted productdata:" , productsData)
         // Update pagination info for the filtered results

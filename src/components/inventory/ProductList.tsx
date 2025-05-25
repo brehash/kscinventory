@@ -196,6 +196,7 @@ const ProductList: React.FC = () => {
           if (a[sortField] > b[sortField]) return sortDirection === 'asc' ? 1 : -1;
           return 0;
         });
+        
         console.log("query: ", searchQuery)
         console.log("filteredProducts: " , filteredProductsData)
         // Get the subset of products for the current page

@@ -185,7 +185,7 @@ const ProductList: React.FC = () => {
             (product.barcode?.toLowerCase() || '').includes(lowerCaseQuery) ||
             (product.description?.toLowerCase() || '').includes(lowerCaseQuery)
           );
-        
+        console.log(filteredProductsData)
         // Set total count for pagination based on filtered results
         setTotalProducts(filteredProductsData.length);
         setPageCount(Math.ceil(filteredProductsData.length / itemsPerPage));

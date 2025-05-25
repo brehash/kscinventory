@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, getDocs, query, orderBy, where, deleteDoc, doc, addDoc, updateDoc, getDoc, limit, startAfter, getCountFromServer } from 'firebase/firestore';
 import { db } from '../../config/firebase';
-import { Product, ProductCategory, Location, ProductType, Provider, PriceHistory } from '../../types';
+import { Product, ProductCategory, ProductType, Location, Provider, PriceHistory } from '../../types';
 import { Plus } from 'lucide-react';
 import Modal from '../ui/Modal';
 import ProductForm from './ProductForm';
@@ -178,23 +178,20 @@ const ProductList: React.FC = () => {
         ...doc.data()
       })) as Product[];
       
-      // Apply search filter (client-side)
+      // Apply search filter if present (client-side filtering)
       if (searchQuery) {
         const lowerCaseQuery = searchQuery.toLowerCase();
         productsData = productsData.filter(product => 
           (product.name?.toLowerCase() || '').includes(lowerCaseQuery) ||
           (product.barcode?.toLowerCase() || '').includes(lowerCaseQuery)
         );
+        
+        // Update pagination info for the filtered results
+        setPageCount(Math.ceil(productsData.length / itemsPerPage));
       }
       
       setProducts(productsData);
       setFilteredProducts(productsData);
-      
-      // Update pagination for filtered results
-      if (searchQuery) {
-        setPageCount(Math.ceil(productsData.length / itemsPerPage));
-      }
-      
       setLoading(false);
     } catch (error) {
       console.error('Error fetching products:', error);
@@ -225,6 +222,25 @@ const ProductList: React.FC = () => {
       setSortDirection('asc');
     }
   };
+  
+  // Reset filters and search
+  const handleResetFilters = () => {
+    setSearchQuery('');
+    setSelectedCategory('');
+    setSelectedLocation('');
+    setSelectedProvider('');
+    setCurrentPage(0);
+    setLastVisibleProduct(null);
+    fetchProducts(0);
+  };
+
+  useEffect(() => {
+    if (!loading) {
+      setCurrentPage(0);
+      setLastVisibleProduct(null);
+      fetchProducts(0);
+    }
+  }, [selectedCategory, selectedLocation, selectedProvider, sortField, sortDirection]);
 
   const handleAddProduct = async (productData: Partial<Product>) => {
     if (!currentUser) return;
@@ -348,7 +364,7 @@ const ProductList: React.FC = () => {
       
       // Log the activity
       await logActivity(
-        'updated', 
+        'updated',
         'product', 
         productToEdit.id, 
         productData.name || productToEdit.name, 
@@ -482,6 +498,7 @@ const ProductList: React.FC = () => {
           categories={categories}
           locations={locations}
           providers={providers}
+          onResetFilters={handleResetFilters}
         />
         
         {/* Product table */}

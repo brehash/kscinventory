@@ -140,7 +140,6 @@ const ProductList: React.FC = () => {
       
       const cacheKey = getCacheKey();
       const now = Date.now();
-
       
       // Create the base query collection
       let productsRef = collection(db, 'products');
@@ -164,6 +163,52 @@ const ProductList: React.FC = () => {
       let baseQuery = filters.length > 0 
         ? query(productsRef, ...filters)
         : query(productsRef);
+      
+      // Get all products for search filtering (before pagination)
+      let allProductsSnapshot;
+      let filteredProductsData: Product[] = [];
+      
+      if (searchQuery) {
+        // Fetch all products matching other filters but without pagination limits
+        // This is inefficient but necessary for client-side text search
+        allProductsSnapshot = await getDocs(baseQuery);
+        
+        // Filter products by search query
+        const lowerCaseQuery = searchQuery.toLowerCase();
+        filteredProductsData = allProductsSnapshot.docs
+          .map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          } as Product))
+          .filter(product => 
+            (product.name?.toLowerCase() || '').includes(lowerCaseQuery) ||
+            (product.barcode?.toLowerCase() || '').includes(lowerCaseQuery) ||
+            (product.description?.toLowerCase() || '').includes(lowerCaseQuery)
+          );
+        
+        // Set total count for pagination based on filtered results
+        setTotalProducts(filteredProductsData.length);
+        setPageCount(Math.ceil(filteredProductsData.length / itemsPerPage));
+        
+        // Apply sorting to filtered products
+        filteredProductsData.sort((a, b) => {
+          if (a[sortField] < b[sortField]) return sortDirection === 'asc' ? -1 : 1;
+          if (a[sortField] > b[sortField]) return sortDirection === 'asc' ? 1 : -1;
+          return 0;
+        });
+        
+        // Get the subset of products for the current page
+        const startIndex = page * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage;
+        const paginatedProducts = filteredProductsData.slice(startIndex, endIndex);
+        
+        setProducts(paginatedProducts);
+        setFilteredProducts(paginatedProducts);
+        setLoading(false);
+        return;
+      }
+      
+      // If no search query, proceed with regular pagination using Firestore
       
       // Get total count for pagination
       const countSnapshot = await getCountFromServer(baseQuery);
@@ -216,18 +261,6 @@ const ProductList: React.FC = () => {
         id: doc.id,
         ...doc.data()
       })) as Product[];
-      console.log("ProductData: ", productsData)
-      // Apply search filter if present (client-side filtering)
-      if (searchQuery) {
-        console.log("SearchQuery:", searchQuery)
-        const lowerCaseQuery = searchQuery.toLowerCase();
-        productsData = productsData.filter(product => 
-          (product.name?.toLowerCase() || '').includes(lowerCaseQuery)
-        );
-        console.log("resulted productdata:" , productsData)
-        // Update pagination info for the filtered results
-        setPageCount(Math.ceil(productsData.length / itemsPerPage));
-      }
       
       setProducts(productsData);
       setFilteredProducts(productsData);

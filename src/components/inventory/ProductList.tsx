@@ -78,14 +78,6 @@ const ProductList: React.FC = () => {
       try {
         // Check if we have valid cached metadata
         const now = Date.now();
-        if (cache.expiresAt > now && 
-            cache.categories.length > 0 && 
-            cache.locations.length > 0 && 
-            cache.productTypes.length > 0 && 
-            cache.providers.length > 0) {
-          console.log('Using cached metadata');
-          return;
-        }
 
         const categoriesSnapshot = await getDocs(collection(db, 'categories'));
         const categoriesData = categoriesSnapshot.docs.map(doc => ({
@@ -148,15 +140,7 @@ const ProductList: React.FC = () => {
       
       const cacheKey = getCacheKey();
       const now = Date.now();
-      
-      // Check if we have a valid cached result
-      if (cache.products[cacheKey] && cache.expiresAt > now) {
-        console.log('Using cached products data');
-        setProducts(cache.products[cacheKey]);
-        setFilteredProducts(cache.products[cacheKey]);
-        setLoading(false);
-        return;
-      }
+
       
       // Create the base query collection
       let productsRef = collection(db, 'products');

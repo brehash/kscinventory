@@ -225,7 +225,7 @@ const ProductList: React.FC = () => {
           (product.name?.toLowerCase() || '').includes(lowerCaseQuery) ||
           (product.barcode?.toLowerCase() || '').includes(lowerCaseQuery)
         );
-        
+        console.log(productsData)
         // Update pagination info for the filtered results
         setPageCount(Math.ceil(productsData.length / itemsPerPage));
       }

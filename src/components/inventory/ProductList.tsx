@@ -8,7 +8,6 @@ import Modal from '../ui/Modal';
 import ProductForm from './ProductForm';
 import { useAuth } from '../auth/AuthProvider';
 import { logActivity } from '../../utils/activityLogger';
-import { useNavigate } from 'react-router-dom';
 
 // Import sub-components
 import ProductListFilters from './ProductListFilters';

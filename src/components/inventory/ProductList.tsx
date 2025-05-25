@@ -219,6 +219,7 @@ const ProductList: React.FC = () => {
       console.log(productsData)
       // Apply search filter if present (client-side filtering)
       if (searchQuery) {
+        console.log(searchQuery)
         const lowerCaseQuery = searchQuery.toLowerCase();
         productsData = productsData.filter(product => 
           (product.name?.toLowerCase() || '').includes(lowerCaseQuery) ||

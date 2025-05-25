@@ -189,6 +189,12 @@ const ProductList: React.FC = () => {
       
       setProducts(productsData);
       setFilteredProducts(productsData);
+      
+      // Update pagination for filtered results
+      if (searchQuery) {
+        setPageCount(Math.ceil(productsData.length / itemsPerPage));
+      }
+      
       setLoading(false);
     } catch (error) {
       console.error('Error fetching products:', error);
@@ -203,17 +209,12 @@ const ProductList: React.FC = () => {
     fetchProducts(newPage);
   };
 
-  useEffect(() => {
-    if (!loading) {
-      setCurrentPage(0);
-      setLastVisibleProduct(null);
-      fetchProducts(0);
-    }
-  }, [searchQuery, selectedCategory, selectedLocation, selectedProvider, sortField, sortDirection]);
-
   // Handle search query changes
   const handleSearch = (query: string) => {
     setSearchQuery(query);
+    setCurrentPage(0);
+    setLastVisibleProduct(null);
+    fetchProducts(0);
   };
 
   const handleSort = (field: keyof Product) => {
@@ -503,7 +504,7 @@ const ProductList: React.FC = () => {
           currentPage={currentPage}
           pageCount={pageCount}
           itemsPerPage={itemsPerPage}
-          totalProducts={totalProducts}
+          totalProducts={searchQuery ? filteredProducts.length : totalProducts}
           handlePageClick={handlePageClick}
         />
       </div>

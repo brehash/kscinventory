@@ -201,7 +201,7 @@ const ProductList: React.FC = () => {
         const startIndex = page * itemsPerPage;
         const endIndex = startIndex + itemsPerPage;
         const paginatedProducts = filteredProductsData.slice(startIndex, endIndex);
-        console.log(paginatedProducts)
+        console.log("paginatedProducts: ", paginatedProducts)
         setProducts(paginatedProducts);
         setFilteredProducts(paginatedProducts);
         setLoading(false);

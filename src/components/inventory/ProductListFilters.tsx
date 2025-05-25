@@ -31,6 +31,7 @@ const ProductListFilters: React.FC<ProductListFiltersProps> = ({
 }) => {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [inputValue, setInputValue] = useState(searchQuery);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   // Keep focus on input after search triggers
   useEffect(() => {
@@ -41,29 +42,54 @@ const ProductListFilters: React.FC<ProductListFiltersProps> = ({
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInputValue(e.target.value);
+    
+    // Clear error when input changes
+    if (searchError) {
+      setSearchError(null);
+    }
   };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Only search if empty or at least 3 characters
-    if (inputValue === '' || inputValue.length >= 3) {
-      setSearchQuery(inputValue);
+    // Clear existing error
+    setSearchError(null);
+    
+    // If input is empty, clear the search
+    if (inputValue === '') {
+      setSearchQuery('');
+      return;
     }
+    
+    // Require at least 3 characters for search
+    if (inputValue.length < 3) {
+      setSearchError('Please enter at least 3 characters to search');
+      return;
+    }
+    
+    setSearchQuery(inputValue);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
-      // Only search if empty or at least 3 characters
-      if (inputValue === '' || inputValue.length >= 3) {
-        setSearchQuery(inputValue);
-      } else if (inputValue.length > 0 && inputValue.length < 3) {
-        // Show a visual cue that the search needs more characters
-        e.currentTarget.classList.add('border-red-500');
-        setTimeout(() => {
-          e.currentTarget.classList.remove('border-red-500');
-        }, 500);
+      e.preventDefault();
+      
+      // Clear existing error
+      setSearchError(null);
+      
+      // If input is empty, clear the search
+      if (inputValue === '') {
+        setSearchQuery('');
+        return;
       }
+      
+      // Require at least 3 characters for search
+      if (inputValue.length < 3) {
+        setSearchError('Please enter at least 3 characters to search');
+        return;
+      }
+      
+      setSearchQuery(inputValue);
     }
   };
 
@@ -82,8 +108,14 @@ const ProductListFilters: React.FC<ProductListFiltersProps> = ({
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               ref={searchInputRef}
-              className="block w-full pl-9 sm:pl-10 pr-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className={`block w-full pl-9 sm:pl-10 pr-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
+                searchError ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : ''
+              }`}
             />
+            {searchError && (
+              <p className="mt-1 text-xs text-red-500">{searchError}</p>
+            )}
+            <button type="submit" className="hidden">Search</button>
           </form>
         </div>
         

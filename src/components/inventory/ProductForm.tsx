@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, getDocs, addDoc, query, where } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { Product, ProductCategory, ProductType, Location, Provider } from '../../types';
-import { Plus, X, Loader2 } from 'lucide-react';
+import { Plus, X, Loader2, Link as LinkIcon } from 'lucide-react';
 import { useAuth } from '../auth/AuthProvider';
 import { logActivity } from '../../utils/activityLogger';
 import { findWooCommerceProductBySKU } from '../../utils/wooCommerceProductSync';

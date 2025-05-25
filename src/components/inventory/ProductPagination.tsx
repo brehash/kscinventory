@@ -23,7 +23,7 @@ const ProductPagination: React.FC<ProductPaginationProps> = ({
     <div className="px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
       <div className="flex-1 flex justify-between sm:hidden">
         <button
-          onClick={() => handlePageClick({ selected: Math.max(0, currentPage - 1) })}
+          onClick={() => handlePageClick({ selected: (currentPage - 1) })}
           disabled={currentPage === 0}
           className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
         >
@@ -31,7 +31,7 @@ const ProductPagination: React.FC<ProductPaginationProps> = ({
           Previous
         </button>
         <button
-          onClick={() => handlePageClick({ selected: Math.min(pageCount - 1, currentPage + 1) })}
+          onClick={() => handlePageClick({ selected: (currentPage + 1) })}
           disabled={currentPage === pageCount - 1}
           className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
         >

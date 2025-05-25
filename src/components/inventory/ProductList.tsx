@@ -182,9 +182,8 @@ const ProductList: React.FC = () => {
       if (searchQuery) {
         const lowerCaseQuery = searchQuery.toLowerCase();
         productsData = productsData.filter(product => 
-          (product.name?.toLowerCase() || '').includes(lowerCaseQuery) || 
-          (product.barcode?.toLowerCase() || '').includes(lowerCaseQuery) ||
-          (product.description?.toLowerCase() || '').includes(lowerCaseQuery)
+          (product.name?.toLowerCase() || '').includes(lowerCaseQuery) ||
+          (product.barcode?.toLowerCase() || '').includes(lowerCaseQuery)
         );
       }
       
@@ -211,22 +210,15 @@ const ProductList: React.FC = () => {
       fetchProducts(0);
     }
   }, [searchQuery, selectedCategory, selectedLocation, selectedProvider, sortField, sortDirection]);
-  
-  // Apply search filter immediately on searchQuery change
-  useEffect(() => {
-    if (searchQuery) {
-      const lowerCaseQuery = searchQuery.toLowerCase();
-      const filtered = products.filter(product => 
-        (product.name?.toLowerCase() || '').includes(lowerCaseQuery) || 
-        (product.barcode?.toLowerCase() || '').includes(lowerCaseQuery) ||
-        (product.description?.toLowerCase() || '').includes(lowerCaseQuery)
-      );
-      setFilteredProducts(filtered);
-    } else {
-      setFilteredProducts(products);
-    }
-  }, [products, searchQuery]);
 
+  // Handle search manually with 3 char minimum
+  const handleSearchChange = (query: string) => {
+    // Always allow empty string (for clearing search)
+    if (query === '' || query.length >= 3) {
+      setSearchQuery(query);
+    }
+  };
+  
   const handleSort = (field: keyof Product) => {
     if (field === sortField) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
@@ -482,7 +474,7 @@ const ProductList: React.FC = () => {
         {/* Filter controls */}
         <ProductListFilters 
           searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
+          setSearchQuery={handleSearchChange}
           selectedCategory={selectedCategory}
           setSelectedCategory={setSelectedCategory}
           selectedLocation={selectedLocation}

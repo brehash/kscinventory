@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { ProductCategory, Location, Provider } from '../../types';
 import { Search, Filter } from 'lucide-react';
 
@@ -29,6 +29,26 @@ const ProductListFilters: React.FC<ProductListFiltersProps> = ({
   locations,
   providers
 }) => {
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Keep focus on input after search triggers
+  useEffect(() => {
+    if (searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [searchQuery]);
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    // Only update search query if empty (to allow clearing) or has at least 3 characters
+    if (value === '' || value.length >= 3) {
+      setSearchQuery(value);
+    } else if (value.length < 3) {
+      // Still update the input value for UX, but don't trigger search
+      e.target.value = value;
+    }
+  };
+
   return (
     <div className="p-3 sm:p-4 border-b border-gray-200">
       <div className="flex flex-col md:flex-row gap-3 sm:gap-4">
@@ -38,10 +58,11 @@ const ProductListFilters: React.FC<ProductListFiltersProps> = ({
           </div>
           <input
             type="text"
-            placeholder="Search products..."
+            placeholder="Search products by name or barcode (min 3 chars)..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="block w-full pl-9 sm:pl-10 pr-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            onChange={handleSearchChange}
+            ref={searchInputRef}
+            className="block w-full pl-9 sm:pl-10 pr-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           />
         </div>
         

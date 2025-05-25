@@ -232,7 +232,7 @@ const ProductList: React.FC = () => {
         id: doc.id,
         ...doc.data()
       })) as Product[];
-      
+      console.log(productsData)
       // Apply search filter if present (client-side filtering)
       if (searchQuery) {
         const lowerCaseQuery = searchQuery.toLowerCase();

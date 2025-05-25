@@ -16,6 +16,18 @@ import ProductPagination from './ProductPagination';
 import ProductDeleteConfirmation from './ProductDeleteConfirmation';
 import MoveItemModal from './MoveItemModal';
 
+// Create a cache for frequently accessed data
+interface Cache {
+  products: { [key: string]: Product[] };
+  categories: ProductCategory[];
+  locations: Location[];
+  productTypes: ProductType[];
+  providers: Provider[];
+  expiresAt: number;
+}
+
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache lifetime
+
 const ProductList: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
@@ -47,13 +59,34 @@ const ProductList: React.FC = () => {
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [productToMove, setProductToMove] = useState<Product | null>(null);
 
+  // Cache state
+  const [cache, setCache] = useState<Cache>({
+    products: {},
+    categories: [],
+    locations: [],
+    productTypes: [],
+    providers: [],
+    expiresAt: 0
+  });
+
   const { currentUser } = useAuth();
   const navigate = useNavigate();
 
+  // Fetch metadata (categories, locations, etc.) once on initial load
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchMetadata = async () => {
       try {
-        // Fetch categories
+        // Check if we have valid cached metadata
+        const now = Date.now();
+        if (cache.expiresAt > now && 
+            cache.categories.length > 0 && 
+            cache.locations.length > 0 && 
+            cache.productTypes.length > 0 && 
+            cache.providers.length > 0) {
+          console.log('Using cached metadata');
+          return;
+        }
+
         const categoriesSnapshot = await getDocs(collection(db, 'categories'));
         const categoriesData = categoriesSnapshot.docs.map(doc => ({
           id: doc.id,
@@ -61,7 +94,6 @@ const ProductList: React.FC = () => {
         })) as ProductCategory[];
         setCategories(categoriesData);
         
-        // Fetch product types
         const typesSnapshot = await getDocs(collection(db, 'productTypes'));
         const typesData = typesSnapshot.docs.map(doc => ({
           id: doc.id,
@@ -69,7 +101,6 @@ const ProductList: React.FC = () => {
         })) as ProductType[];
         setProductTypes(typesData);
         
-        // Fetch locations
         const locationsSnapshot = await getDocs(collection(db, 'locations'));
         const locationsData = locationsSnapshot.docs.map(doc => ({
           id: doc.id,
@@ -77,36 +108,60 @@ const ProductList: React.FC = () => {
         })) as Location[];
         setLocations(locationsData);
         
-        // Fetch providers
         const providersSnapshot = await getDocs(collection(db, 'providers'));
         const providersData = providersSnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         })) as Provider[];
         setProviders(providersData);
-        
-        // Fetch products
-        await fetchProducts(0);
-        
-        setLoading(false);
+
+        // Update cache with new metadata
+        setCache(prev => ({
+          ...prev,
+          categories: categoriesData,
+          locations: locationsData,
+          productTypes: typesData,
+          providers: providersData,
+          expiresAt: now + CACHE_TTL
+        }));
       } catch (error) {
-        console.error('Error fetching data:', error);
-        setLoading(false);
+        console.error('Error fetching metadata:', error);
       }
     };
-    
-    fetchData();
+
+    fetchMetadata();
   }, []);
+
+  // Initial products fetch
+  useEffect(() => {
+    fetchProducts(0);
+  }, []);
+
+  // Generate a cache key based on current filters and sort settings
+  const getCacheKey = () => {
+    return `${searchQuery}|${selectedCategory}|${selectedLocation}|${selectedProvider}|${sortField}|${sortDirection}|${currentPage}`;
+  };
 
   const fetchProducts = async (page = 0) => {
     try {
       setLoading(true);
       
+      const cacheKey = getCacheKey();
+      const now = Date.now();
+      
+      // Check if we have a valid cached result
+      if (cache.products[cacheKey] && cache.expiresAt > now) {
+        console.log('Using cached products data');
+        setProducts(cache.products[cacheKey]);
+        setFilteredProducts(cache.products[cacheKey]);
+        setLoading(false);
+        return;
+      }
+      
       // Create the base query collection
       let productsRef = collection(db, 'products');
-      let baseQuery = productsRef;
       
-      // Add filters if selected
+      // Apply serverside filters if possible
       const filters = [];
       
       if (selectedCategory) {
@@ -121,10 +176,10 @@ const ProductList: React.FC = () => {
         filters.push(where('providerId', '==', selectedProvider));
       }
       
-      // If we have filters, apply them to the baseQuery
-      if (filters.length > 0) {
-        baseQuery = query(productsRef, ...filters);
-      }
+      // Create the base query with filters
+      let baseQuery = filters.length > 0 
+        ? query(productsRef, ...filters)
+        : query(productsRef);
       
       // Get total count for pagination
       const countSnapshot = await getCountFromServer(baseQuery);
@@ -135,7 +190,7 @@ const ProductList: React.FC = () => {
       // Create the paged query
       let productsQuery;
       
-      // Set up pagination query
+      // Set up pagination query with sorting
       if (page === 0) {
         // First page
         productsQuery = query(
@@ -161,9 +216,9 @@ const ProductList: React.FC = () => {
         setCurrentPage(0);
       }
       
-      const productsSnapshot = await getDocs(productsQuery);
+      const snapshot = await getDocs(productsQuery);
       
-      if (productsSnapshot.empty) {
+      if (snapshot.empty) {
         setProducts([]);
         setFilteredProducts([]);
         setLoading(false);
@@ -171,9 +226,9 @@ const ProductList: React.FC = () => {
       }
       
       // Save the last document for pagination
-      setLastVisibleProduct(productsSnapshot.docs[productsSnapshot.docs.length - 1]);
+      setLastVisibleProduct(snapshot.docs[snapshot.docs.length - 1]);
       
-      let productsData = productsSnapshot.docs.map(doc => ({
+      let productsData = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       })) as Product[];
@@ -192,6 +247,17 @@ const ProductList: React.FC = () => {
       
       setProducts(productsData);
       setFilteredProducts(productsData);
+      
+      // Update cache with new data
+      setCache(prev => ({
+        ...prev,
+        products: {
+          ...prev.products,
+          [cacheKey]: productsData
+        },
+        expiresAt: now + CACHE_TTL
+      }));
+      
       setLoading(false);
     } catch (error) {
       console.error('Error fetching products:', error);
@@ -270,6 +336,13 @@ const ProductList: React.FC = () => {
       );
       
       setShowAddModal(false);
+      
+      // Invalidate cache
+      setCache(prev => ({
+        ...prev,
+        products: {},
+        expiresAt: 0
+      }));
       
       // Refresh products to update pagination
       fetchProducts(currentPage);
@@ -375,6 +448,13 @@ const ProductList: React.FC = () => {
       setShowEditModal(false);
       setProductToEdit(null);
       
+      // Invalidate cache
+      setCache(prev => ({
+        ...prev,
+        products: {},
+        expiresAt: 0
+      }));
+      
       // Refresh products to update pagination
       fetchProducts(currentPage);
     } catch (error) {
@@ -401,6 +481,13 @@ const ProductList: React.FC = () => {
       setFilteredProducts(filteredProducts.filter(p => p.id !== productToDelete.id));
       setShowDeleteModal(false);
       setProductToDelete(null);
+      
+      // Invalidate cache
+      setCache(prev => ({
+        ...prev,
+        products: {},
+        expiresAt: 0
+      }));
       
       // Recalculate pagination
       setTotalProducts(totalProducts - 1);
@@ -456,11 +543,18 @@ const ProductList: React.FC = () => {
 
   // Handle move success
   const handleMoveSuccess = (sourceLocationId: string, destinationLocationId: string, quantity: number) => {
+    // Invalidate cache
+    setCache(prev => ({
+      ...prev,
+      products: {},
+      expiresAt: 0
+    }));
+    
     // Refresh the products list
     fetchProducts(currentPage);
   };
 
-  if (loading) {
+  if (loading && products.length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>

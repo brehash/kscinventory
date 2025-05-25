@@ -27,6 +27,7 @@ const ProductPagination: React.FC<ProductPaginationProps> = ({
           disabled={currentPage === 0}
           className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
         >
+          <ChevronLeft className="h-4 w-4 mr-1" />
           Previous
         </button>
         <button
@@ -35,6 +36,7 @@ const ProductPagination: React.FC<ProductPaginationProps> = ({
           className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
         >
           Next
+          <ChevronRight className="h-4 w-4 ml-1" />
         </button>
       </div>
       <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">

@@ -185,7 +185,7 @@ const ProductList: React.FC = () => {
             (product.barcode?.toLowerCase() || '').includes(lowerCaseQuery) ||
             (product.description?.toLowerCase() || '').includes(lowerCaseQuery)
           );
-        console.log(filteredProductsData)
+        
         // Set total count for pagination based on filtered results
         setTotalProducts(filteredProductsData.length);
         setPageCount(Math.ceil(filteredProductsData.length / itemsPerPage));
@@ -196,7 +196,7 @@ const ProductList: React.FC = () => {
           if (a[sortField] > b[sortField]) return sortDirection === 'asc' ? 1 : -1;
           return 0;
         });
-        
+        console.log(filteredProductsData)
         // Get the subset of products for the current page
         const startIndex = page * itemsPerPage;
         const endIndex = startIndex + itemsPerPage;

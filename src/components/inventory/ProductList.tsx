@@ -216,16 +216,16 @@ const ProductList: React.FC = () => {
         id: doc.id,
         ...doc.data()
       })) as Product[];
-      console.log(productsData)
+      console.log("ProductData: ", productsData)
       // Apply search filter if present (client-side filtering)
       if (searchQuery) {
-        console.log(searchQuery)
+        console.log("SearchQuery:", searchQuery)
         const lowerCaseQuery = searchQuery.toLowerCase();
         productsData = productsData.filter(product => 
           (product.name?.toLowerCase() || '').includes(lowerCaseQuery) ||
           (product.barcode?.toLowerCase() || '').includes(lowerCaseQuery)
         );
-        console.log(productsData)
+        console.log("resulted productdata:" , productsData)
         // Update pagination info for the filtered results
         setPageCount(Math.ceil(productsData.length / itemsPerPage));
       }

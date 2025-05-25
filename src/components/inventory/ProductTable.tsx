@@ -15,6 +15,7 @@ interface ProductTableProps {
   handleOpenEditModal: (product: Product) => void;
   confirmDelete: (product: Product) => void;
   handleMoveItems?: (product: Product) => void;
+  loading?: boolean; // Added loading prop
 }
 
 const ProductTable: React.FC<ProductTableProps> = ({
@@ -28,7 +29,8 @@ const ProductTable: React.FC<ProductTableProps> = ({
   handleSort,
   handleOpenEditModal,
   confirmDelete,
-  handleMoveItems
+  handleMoveItems,
+  loading = false // Default to false if not provided
 }) => {
   return (
     <div className="overflow-x-auto">

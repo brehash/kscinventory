@@ -164,18 +164,18 @@ const ProductList: React.FC = () => {
         ? query(productsRef, ...filters)
         : query(productsRef);
       
-      // Get all products for search filtering (before pagination)
-      let allProductsSnapshot;
-      let filteredProductsData: Product[] = [];
+      // Get total count for pagination
+      const countSnapshot = await getCountFromServer(baseQuery);
+      const totalCount = countSnapshot.data().count;
       
+      // Apply search filter - we need to fetch all products matching other filters
+      // to perform client-side text search
       if (searchQuery) {
-        // Fetch all products matching other filters but without pagination limits
-        // This is inefficient but necessary for client-side text search
-        allProductsSnapshot = await getDocs(baseQuery);
+        const allProductsSnapshot = await getDocs(baseQuery);
         
-        // Filter products by search query
+        // Filter products by search query (case-insensitive contains)
         const lowerCaseQuery = searchQuery.toLowerCase();
-        filteredProductsData = allProductsSnapshot.docs
+        let allFilteredProducts = allProductsSnapshot.docs
           .map(doc => ({
             id: doc.id,
             ...doc.data()
@@ -187,23 +187,20 @@ const ProductList: React.FC = () => {
           );
         
         // Set total count for pagination based on filtered results
-        setTotalProducts(filteredProductsData.length);
-        setPageCount(Math.ceil(filteredProductsData.length / itemsPerPage));
+        setTotalProducts(allFilteredProducts.length);
+        setPageCount(Math.ceil(allFilteredProducts.length / itemsPerPage));
         
         // Apply sorting to filtered products
-        filteredProductsData.sort((a, b) => {
+        allFilteredProducts.sort((a, b) => {
           if (a[sortField] < b[sortField]) return sortDirection === 'asc' ? -1 : 1;
           if (a[sortField] > b[sortField]) return sortDirection === 'asc' ? 1 : -1;
           return 0;
         });
         
-        console.log("query: ", searchQuery)
-        console.log("filteredProducts: " , filteredProductsData)
         // Get the subset of products for the current page
         const startIndex = page * itemsPerPage;
         const endIndex = startIndex + itemsPerPage;
-        const paginatedProducts = filteredProductsData.slice(startIndex, endIndex);
-        console.log("paginatedProducts: ", paginatedProducts)
+        const paginatedProducts = allFilteredProducts.slice(startIndex, endIndex);
         
         setProducts(paginatedProducts);
         setFilteredProducts(paginatedProducts);
@@ -212,10 +209,6 @@ const ProductList: React.FC = () => {
       }
       
       // If no search query, proceed with regular pagination using Firestore
-      
-      // Get total count for pagination
-      const countSnapshot = await getCountFromServer(baseQuery);
-      const totalCount = countSnapshot.data().count;
       setTotalProducts(totalCount);
       setPageCount(Math.ceil(totalCount / itemsPerPage));
       

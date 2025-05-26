@@ -723,10 +723,7 @@ const GlobalPackingSlipV2: React.FC = () => {
                                   })}
                                 </div>
                                 
-                                <div className="mt-2 pt-2 border-t border-gray-100 text-sm flex justify-between">
-                                  <span className="text-gray-600">Total:</span>
-                                  <span className="font-medium text-gray-900">{order.total.toFixed(2)} RON</span>
-                                </div>
+                                
                               </div>
                             );
                           })}

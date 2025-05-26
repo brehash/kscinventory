@@ -16,22 +16,33 @@ import { logActivity } from './activityLogger';
 
 /**
  * Initialize WooCommerce API
- * Creates and returns a configured WooCommerceRestApi instance using credentials from localStorage
+ * Creates and returns a configured WooCommerceRestApi instance using credentials from Firebase
  */
-const initWooCommerceAPI = () => {
-  // Get settings from localStorage
-  const url = localStorage.getItem('wc_url') || '';
-  const consumerKey = localStorage.getItem('wc_consumer_key') || '';
-  const consumerSecret = localStorage.getItem('wc_consumer_secret') || '';
-  
-  const wooCommerceConfig = {
-    url,
-    consumerKey,
-    consumerSecret,
-    version: 'wc/v3'
-  };
-  
-  return new WooCommerceRestApi(wooCommerceConfig);
+const initWooCommerceAPI = async () => {
+  try {
+    // Get settings from Firebase
+    const settingsDoc = await getDoc(doc(db, 'woocommerce_settings', 'global_settings'));
+    
+    if (!settingsDoc.exists()) {
+      console.error('WooCommerce settings not found in Firebase');
+      return null;
+    }
+    
+    const data = settingsDoc.data();
+    const url = data.wc_url || '';
+    const consumerKey = data.wc_consumer_key || '';
+    const consumerSecret = data.wc_consumer_secret || '';
+    
+    return new WooCommerceRestApi({
+      url,
+      consumerKey,
+      consumerSecret,
+      version: 'wc/v3'
+    });
+  } catch (error) {
+    console.error('Error loading WooCommerce settings from Firebase:', error);
+    return null;
+  }
 };
 
 /**
@@ -204,17 +215,14 @@ export const updateOrderStatusOnWooCommerce = async (
   status: OrderStatus
 ): Promise<{success: boolean, error?: string}> => {
   try {
-    // Check if credentials exist
-    if (!localStorage.getItem('wc_url') || 
-        !localStorage.getItem('wc_consumer_key') || 
-        !localStorage.getItem('wc_consumer_secret')) {
+    // Check if API can be initialized
+    const api = await initWooCommerceAPI();
+    if (!api) {
       return { 
         success: false, 
-        error: 'WooCommerce credentials not found. Please configure them in Settings > WooCommerce.' 
+        error: 'WooCommerce API initialization failed. Please check your settings.' 
       };
     }
-    
-    const api = initWooCommerceAPI();
     
     // Map the internal status to a WooCommerce status
     const wcStatus = mapInternalStatusToWooCommerce(status);
@@ -669,16 +677,13 @@ export const syncWooCommerceOrders = async (currentUser: User) => {
     // console.log('Starting WooCommerce orders sync...');
     
     // Initialize WooCommerce API
-    const api = initWooCommerceAPI();
+    const api = await initWooCommerceAPI();
     
-    // Check if credentials exist
-    if (!localStorage.getItem('wc_url') || 
-        !localStorage.getItem('wc_consumer_key') || 
-        !localStorage.getItem('wc_consumer_secret')) {
-      // console.error('WooCommerce credentials not found');
+    // Check if API initialization succeeded
+    if (!api) {
       return { 
         success: false, 
-        error: 'WooCommerce credentials not found. Please configure them in Settings > WooCommerce.' 
+        error: 'WooCommerce API initialization failed. Please check your settings.' 
       };
     }
     
@@ -970,13 +975,11 @@ export const wooSyncScript = async () => {
     console.log('Starting WooCommerce order sync...');
     
     // Initialize WooCommerce API
-    const api = initWooCommerceAPI();
+    const api = await initWooCommerceAPI();
     
-    // Check if credentials exist
-    if (!localStorage.getItem('wc_url') || 
-        !localStorage.getItem('wc_consumer_key') || 
-        !localStorage.getItem('wc_consumer_secret')) {
-      console.error('WooCommerce credentials not found.');
+    // Check if API initialization succeeded
+    if (!api) {
+      console.error('WooCommerce API initialization failed');
       return;
     }
     

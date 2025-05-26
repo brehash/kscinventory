@@ -15,6 +15,8 @@ import {
   Layers,
   Database
 } from 'lucide-react';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { db } from '../../config/firebase';
 import { syncWooCommerceOrders } from '../../utils/wooCommerceSync';
 import { useAuth } from '../auth/AuthProvider';
 import Modal from '../ui/Modal';
@@ -58,30 +60,36 @@ const WooCommerceSettings: React.FC = () => {
     stage: 'idle'
   });
   
-  // Load settings from local storage on mount
-  useEffect(() => {
-    const storedUrl = localStorage.getItem('wc_url');
-    const storedConsumerKey = localStorage.getItem('wc_consumer_key');
-    const storedConsumerSecret = localStorage.getItem('wc_consumer_secret');
-    const storedConnectionStatus = localStorage.getItem('wc_connection_status');
-    
-    if (storedUrl) setUrl(storedUrl);
-    if (storedConsumerKey) setConsumerKey(storedConsumerKey);
-    if (storedConsumerSecret) setConsumerSecret(storedConsumerSecret);
-    if (storedConnectionStatus && (storedConnectionStatus === 'connected' || storedConnectionStatus === 'disconnected')) {
-      setConnectionStatus(storedConnectionStatus);
-    }
-  }, []);
+  // Loading state for saving settings
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState<string | null>(null);
   
-  // Save settings to local storage when they change
+  // Load settings from Firestore on mount
   useEffect(() => {
-    if (url) localStorage.setItem('wc_url', url);
-    if (consumerKey) localStorage.setItem('wc_consumer_key', consumerKey);
-    if (consumerSecret) localStorage.setItem('wc_consumer_secret', consumerSecret);
-    if (connectionStatus !== 'checking' && connectionStatus !== 'unchecked') {
-      localStorage.setItem('wc_connection_status', connectionStatus);
-    }
-  }, [url, consumerKey, consumerSecret, connectionStatus]);
+    const fetchWooCommerceSettings = async () => {
+      try {
+        setLoading(true);
+        const docRef = doc(db, 'woocommerce_settings', 'global_settings');
+        const docSnap = await getDoc(docRef);
+        
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setUrl(data.wc_url || '');
+          setConsumerKey(data.wc_consumer_key || '');
+          setConsumerSecret(data.wc_consumer_secret || '');
+          setConnectionStatus(data.connection_status || 'unchecked');
+          setConnectionDetails(data.connection_details || '');
+        }
+        setLoading(false);
+      } catch (error) {
+        console.error("Error fetching WooCommerce settings:", error);
+        setError("Failed to load WooCommerce settings");
+        setLoading(false);
+      }
+    };
+
+    fetchWooCommerceSettings();
+  }, []);
   
   /**
    * Check connection to WooCommerce API
@@ -121,10 +129,17 @@ const WooCommerceSettings: React.FC = () => {
           url: response.data?.url || url
         };
         
-        setConnectionDetails(`Connected to ${storeInfo.name}`);
+        const connectionDetailsText = `Connected to ${storeInfo.name}`;
+        setConnectionDetails(connectionDetailsText);
+        
+        // Save settings to Firestore
+        await saveSettingsToFirebase(url, consumerKey, consumerSecret, 'connected', connectionDetailsText);
       } else {
         setConnectionStatus('disconnected');
         setError('Connection failed: Unexpected response from server');
+        
+        // Save failed status to Firestore
+        await saveSettingsToFirebase(url, consumerKey, consumerSecret, 'disconnected');
       }
     } catch (err) {
       console.error('WooCommerce connection error:', err);
@@ -149,6 +164,64 @@ const WooCommerceSettings: React.FC = () => {
       
       setConnectionStatus('disconnected');
       setError(errorMessage);
+      
+      // Save failed status to Firestore
+      await saveSettingsToFirebase(url, consumerKey, consumerSecret, 'disconnected');
+    }
+  };
+  
+  /**
+   * Save WooCommerce settings to Firebase
+   */
+  const saveSettingsToFirebase = async (
+    wcUrl: string,
+    wcConsumerKey: string,
+    wcConsumerSecret: string,
+    status: string = 'unchecked',
+    details: string = ''
+  ) => {
+    try {
+      setLoading(true);
+      const docRef = doc(db, 'woocommerce_settings', 'global_settings');
+      
+      // Check if document exists
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        // Update existing document
+        await updateDoc(docRef, {
+          wc_url: wcUrl,
+          wc_consumer_key: wcConsumerKey,
+          wc_consumer_secret: wcConsumerSecret,
+          connection_status: status,
+          connection_details: details,
+          updated_at: new Date()
+        });
+      } else {
+        // Create new document
+        await setDoc(docRef, {
+          wc_url: wcUrl,
+          wc_consumer_key: wcConsumerKey,
+          wc_consumer_secret: wcConsumerSecret,
+          connection_status: status,
+          connection_details: details,
+          created_at: new Date(),
+          updated_at: new Date()
+        });
+      }
+      
+      setSuccess('WooCommerce settings saved successfully');
+      
+      // Hide success message after 3 seconds
+      setTimeout(() => {
+        setSuccess(null);
+      }, 3000);
+      
+    } catch (error) {
+      console.error('Error saving WooCommerce settings to Firebase:', error);
+      setError('Failed to save settings to database');
+    } finally {
+      setLoading(false);
     }
   };
   
@@ -206,29 +279,10 @@ const WooCommerceSettings: React.FC = () => {
     });
     
     try {
-      // Simulate finding orders
+      // Set progress to finding
       setSyncProgress(prev => ({ ...prev, stage: 'finding' }));
       
-      // Initialize WooCommerce API to get order count
-      const api = new WooCommerceRestApi({
-        url: url.trim(),
-        consumerKey: consumerKey.trim(),
-        consumerSecret: consumerSecret.trim(),
-        version: 'wc/v3'
-      });
-      
-      // Get total order count
-      const countResponse = await api.get('orders', { per_page: 1 });
-      const totalOrders = parseInt(countResponse.headers['x-wp-total'] || '0');
-      
-      // Update progress with total found
-      setSyncProgress(prev => ({ 
-        ...prev, 
-        totalFound: totalOrders,
-        stage: 'processing'
-      }));
-      
-      // Start the actual sync process
+      // Start the sync process
       const result = await syncWooCommerceOrders(currentUser);
       
       if (result.success) {
@@ -236,10 +290,12 @@ const WooCommerceSettings: React.FC = () => {
         setSyncProgress(prev => ({
           ...prev,
           processed: result.newOrders + result.updatedOrders,
+          totalFound: result.newOrders + result.updatedOrders,
           stage: 'complete'
         }));
         
         setSyncResult(result);
+        
       } else {
         setError(result.error || 'Sync failed');
         
@@ -356,6 +412,26 @@ const WooCommerceSettings: React.FC = () => {
           </div>
         </div>
       )}
+      
+      {/* Success Message */}
+      {success && (
+        <div className="bg-green-50 border-l-4 border-green-500 p-4 mb-4">
+          <div className="flex items-center">
+            <Check className="h-5 w-5 text-green-500 mr-2" />
+            <p className="text-sm text-green-700">{success}</p>
+          </div>
+        </div>
+      )}
+      
+      {/* Error Message */}
+      {error && connectionStatus !== 'disconnected' && (
+        <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4">
+          <div className="flex items-center">
+            <AlertTriangle className="h-5 w-5 text-red-500 mr-2" />
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="border-b border-gray-200 mb-4">
@@ -442,11 +518,11 @@ const WooCommerceSettings: React.FC = () => {
                 </p>
               </div>
               
-              <div className="pt-2">
+              <div className="flex space-x-3 pt-2">
                 <button
                   type="button"
                   onClick={checkConnection}
-                  disabled={connectionStatus === 'checking'}
+                  disabled={connectionStatus === 'checking' || loading}
                   className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
                 >
                   {connectionStatus === 'checking' ? (
@@ -454,11 +530,32 @@ const WooCommerceSettings: React.FC = () => {
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                       Checking Connection...
                     </>
+                  ) : loading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
                   ) : (
                     <>
                       <RefreshCw className="h-4 w-4 mr-2" />
                       Check Connection
                     </>
+                  )}
+                </button>
+                
+                <button
+                  type="button"
+                  onClick={() => saveSettingsToFirebase(url, consumerKey, consumerSecret, connectionStatus, connectionDetails)}
+                  disabled={loading || connectionStatus === 'checking'}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    "Save Settings"
                   )}
                 </button>
               </div>

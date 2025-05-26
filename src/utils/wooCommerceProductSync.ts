@@ -1,25 +1,40 @@
 import WooCommerceRestApi from '@woocommerce/woocommerce-rest-api';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../config/firebase';
 import { Product } from '../types';
 
 /**
- * Initializes the WooCommerce API client with stored credentials.
+ * Initializes the WooCommerce API client with credentials from Firebase.
  *
  * @returns A WooCommerceRestApi instance configured with the stored credentials.
  */
-const initWooCommerceAPI = () => {
-  // Get settings from localStorage.
-  const url = localStorage.getItem('wc_url') || '';
-  const consumerKey = localStorage.getItem('wc_consumer_key') || '';
-  const consumerSecret = localStorage.getItem('wc_consumer_secret') || '';
-  
-  const wooCommerceConfig = {
-    url,
-    consumerKey,
-    consumerSecret,
-    version: 'wc/v3'
-  };
-  
-  return new WooCommerceRestApi(wooCommerceConfig);
+const initWooCommerceAPI = async () => {
+  try {
+    // Get settings from Firebase
+    const settingsDoc = await getDoc(doc(db, 'woocommerce_settings', 'global_settings'));
+    
+    if (!settingsDoc.exists()) {
+      console.error('WooCommerce settings not found in Firebase');
+      return null;
+    }
+    
+    const data = settingsDoc.data();
+    const url = data.wc_url || '';
+    const consumerKey = data.wc_consumer_key || '';
+    const consumerSecret = data.wc_consumer_secret || '';
+    
+    const wooCommerceConfig = {
+      url,
+      consumerKey,
+      consumerSecret,
+      version: 'wc/v3'
+    };
+    
+    return new WooCommerceRestApi(wooCommerceConfig);
+  } catch (error) {
+    console.error("Error initializing WooCommerce API:", error);
+    return null;
+  }
 };
 
 /**
@@ -42,18 +57,14 @@ export const updateWooCommerceProductStock = async (
       };
     }
     
-    // Check if WooCommerce credentials are set.
-    if (!localStorage.getItem('wc_url') || 
-        !localStorage.getItem('wc_consumer_key') || 
-        !localStorage.getItem('wc_consumer_secret')) {
+    // Initialize WooCommerce API
+    const api = await initWooCommerceAPI();
+    if (!api) {
       return { 
         success: false, 
-        error: 'WooCommerce credentials not found. Please configure them in Settings > WooCommerce.' 
+        error: 'Failed to initialize WooCommerce API. Please check your settings.' 
       };
     }
-    
-    // Initialize WooCommerce API.
-    const api = initWooCommerceAPI();
     
     // Update product stock quantity in WooCommerce.
     const response = await api.put(`products/${product.wooCommerceId}`, {
@@ -90,18 +101,14 @@ export const findWooCommerceProductBySKU = async (
   if (!sku) return null;
   
   try {
-    // Check if WooCommerce credentials are set.
-    if (!localStorage.getItem('wc_url') || 
-        !localStorage.getItem('wc_consumer_key') || 
-        !localStorage.getItem('wc_consumer_secret')) {
-      console.error('WooCommerce credentials not found');
+    // Initialize WooCommerce API
+    const api = await initWooCommerceAPI();
+    if (!api) {
+      console.error('Failed to initialize WooCommerce API');
       return null;
     }
     
-    // Initialize WooCommerce API.
-    const api = initWooCommerceAPI();
-    
-    // Search for product by SKU.
+    // Search for product by SKU
     const response = await api.get('products', {
       sku: sku
     });

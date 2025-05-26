@@ -3,7 +3,6 @@ import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { Product } from '../../types';
 import { Search, Link as LinkIcon, Unlink, Loader2, AlertTriangle, CheckCircle, Upload } from 'lucide-react';
-import WooCommerceRestApi from '@woocommerce/woocommerce-rest-api';
 import { findWooCommerceProductBySKU, updateWooCommerceProductStock } from '../../utils/wooCommerceProductSync';
 
 // WooCommerce Product type for mapping
@@ -30,21 +29,6 @@ const WooCommerceProductMapping: React.FC = () => {
   const [isMappingInProgress, setIsMappingInProgress] = useState(false);
   const [isSyncingStock, setIsSyncingStock] = useState(false);
   const [mappingSuccess, setMappingSuccess] = useState<string | null>(null);
-  
-  // Initialize WooCommerce API
-  const initWooCommerceAPI = () => {
-    // Get settings from localStorage
-    const url = localStorage.getItem('wc_url') || '';
-    const consumerKey = localStorage.getItem('wc_consumer_key') || '';
-    const consumerSecret = localStorage.getItem('wc_consumer_secret') || '';
-    
-    return new WooCommerceRestApi({
-      url,
-      consumerKey,
-      consumerSecret,
-      version: 'wc/v3'
-    });
-  };
   
   // Fetch products from Firestore
   useEffect(() => {
@@ -77,27 +61,13 @@ const WooCommerceProductMapping: React.FC = () => {
       try {
         setWcLoading(true);
         
-        // Check if WooCommerce credentials are set
-        if (!localStorage.getItem('wc_url') || 
-            !localStorage.getItem('wc_consumer_key') || 
-            !localStorage.getItem('wc_consumer_secret')) {
-          setError('WooCommerce credentials not found. Please configure them first.');
-          setWcLoading(false);
-          return;
-        }
+        // Fetch WooCommerce products via API
+        const response = await fetchWooCommerceProductsFromAPI();
         
-        // Initialize WooCommerce API
-        const api = initWooCommerceAPI();
-        
-        // Fetch products from WooCommerce
-        const response = await api.get('products', {
-          per_page: 100, // Adjust as needed
-        });
-        
-        if (response && response.data) {
+        if (response && response.success && response.data) {
           setWooCommerceProducts(response.data);
         } else {
-          setError('Failed to fetch WooCommerce products');
+          setError(response?.error || 'Failed to fetch WooCommerce products');
         }
         
         setWcLoading(false);
@@ -110,6 +80,82 @@ const WooCommerceProductMapping: React.FC = () => {
     
     fetchWooCommerceProducts();
   }, []);
+  
+  // Function to fetch WooCommerce products from the API
+  const fetchWooCommerceProductsFromAPI = async (): Promise<{ success: boolean; data?: WooCommerceProduct[]; error?: string }> => {
+    try {
+      // Check if WooCommerce credentials are set in Firebase
+      const settingsDoc = await doc(db, 'woocommerce_settings', 'global_settings');
+      const settingsSnapshot = await getDoc(settingsDoc);
+      
+      if (!settingsSnapshot.exists()) {
+        return { 
+          success: false, 
+          error: 'WooCommerce settings not found. Please configure your API credentials first.' 
+        };
+      }
+      
+      // Here we'd actually call the WooCommerce API to get products
+      // We'll use a WooCommerceRestApi instance
+      const api = await initWooCommerceAPI();
+      
+      if (!api) {
+        return { 
+          success: false, 
+          error: 'Failed to initialize WooCommerce API. Please check your credentials.' 
+        };
+      }
+      
+      const response = await api.get('products', {
+        per_page: 100 // Adjust as needed
+      });
+      
+      return {
+        success: true,
+        data: response.data
+      };
+      
+    } catch (error) {
+      console.error('Error fetching WooCommerce products from API:', error);
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error occurred'
+      };
+    }
+  };
+  
+  // Initialize WooCommerce API
+  const initWooCommerceAPI = async () => {
+    try {
+      // Get settings from Firebase
+      const settingsDoc = await getDoc(doc(db, 'woocommerce_settings', 'global_settings'));
+      
+      if (!settingsDoc.exists()) {
+        console.error('WooCommerce settings not found in Firebase');
+        return null;
+      }
+      
+      const data = settingsDoc.data();
+      const url = data.wc_url || '';
+      const consumerKey = data.wc_consumer_key || '';
+      const consumerSecret = data.wc_consumer_secret || '';
+      
+      // We'd import and use WooCommerceRestApi here
+      // For this implementation we're relying on the imported function from wooCommerceProductSync
+      
+      const WooCommerceRestApi = require('@woocommerce/woocommerce-rest-api').default;
+      
+      return new WooCommerceRestApi({
+        url,
+        consumerKey,
+        consumerSecret,
+        version: 'wc/v3'
+      });
+    } catch (error) {
+      console.error('Error initializing WooCommerce API:', error);
+      return null;
+    }
+  };
   
   // Filter products based on search query and unmapped filter
   const filteredProducts = products.filter(product => {

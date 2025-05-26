@@ -15,6 +15,7 @@ import OrderCreate from './components/orders/OrderCreate';
 import OrderDetails from './components/orders/OrderDetails';
 import PackingSlip from './components/orders/PackingSlip';
 import GlobalPackingSlip from './components/orders/GlobalPackingSlip';
+import GlobalPackingSlipV2 from './components/orders/GlobalPackingSlipV2';
 import ActivityList from './components/activity/ActivityList';
 import SettingsTabs from './components/settings/SettingsTabs';
 import LocationSettings from './components/settings/LocationSettings';
@@ -104,6 +105,7 @@ function App() {
             <Route path="orders/:id" element={<OrderDetails />} />
             <Route path="orders/:id/packingslip" element={<PackingSlip />} />
             <Route path="orders/packingslip" element={<GlobalPackingSlip />} />
+            <Route path="orders/consolidated-packingslip" element={<GlobalPackingSlipV2 />} />
             
             {/* Low Stock Alerts Route */}
             <Route path="alerts" element={<LowStockAlertList />} />

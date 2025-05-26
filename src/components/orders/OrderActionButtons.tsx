@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, RefreshCw, Plus } from 'lucide-react';
+import { FileText, RefreshCw, Plus, Layers } from 'lucide-react';
 
 interface OrderActionButtonsProps {
   openSyncModal: () => void;
@@ -16,7 +16,15 @@ const OrderActionButtons: React.FC<OrderActionButtonsProps> = ({ openSyncModal }
         className="inline-flex items-center px-3 py-1.5 sm:px-4 sm:py-2 border border-transparent text-xs sm:text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
       >
         <FileText className="h-4 w-4 mr-1.5 sm:mr-2" />
-        Global Packing Slip
+        Basic Packing Slip
+      </button>
+      
+      <button
+        onClick={() => navigate('/orders/consolidated-packingslip')}
+        className="inline-flex items-center px-3 py-1.5 sm:px-4 sm:py-2 border border-transparent text-xs sm:text-sm font-medium rounded-md shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+      >
+        <Layers className="h-4 w-4 mr-1.5 sm:mr-2" />
+        Consolidated Packing
       </button>
       
       <button

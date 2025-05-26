@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { Product } from '../../types';
 import { Search, Link as LinkIcon, Unlink, Loader2, AlertTriangle, CheckCircle, Upload } from 'lucide-react';
@@ -85,8 +85,7 @@ const WooCommerceProductMapping: React.FC = () => {
   const fetchWooCommerceProductsFromAPI = async (): Promise<{ success: boolean; data?: WooCommerceProduct[]; error?: string }> => {
     try {
       // Check if WooCommerce credentials are set in Firebase
-      const settingsDoc = await doc(db, 'woocommerce_settings', 'global_settings');
-      const settingsSnapshot = await getDoc(settingsDoc);
+      const settingsDoc = await getDoc(doc(db, 'woocommerce_settings', 'global_settings'));
       
       if (!settingsSnapshot.exists()) {
         return { 

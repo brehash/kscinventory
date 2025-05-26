@@ -1,6 +1,6 @@
 import React from 'react';
 import { Product } from '../../types';
-import { ArrowUp, ArrowDown, Package } from 'lucide-react';
+import { ArrowUp, ArrowDown, Package, Loader2 } from 'lucide-react';
 import ProductTableRow from './ProductTableRow';
 
 interface ProductTableProps {
@@ -131,7 +131,16 @@ const ProductTable: React.FC<ProductTableProps> = ({
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
-          {filteredProducts.length > 0 ? (
+          {loading ? (
+            <tr>
+              <td colSpan={9} className="px-4 sm:px-6 py-4 text-center text-gray-500">
+                <div className="flex justify-center items-center">
+                  <Loader2 className="animate-spin h-6 w-6 text-indigo-500 mr-2" />
+                  <span>Loading products...</span>
+                </div>
+              </td>
+            </tr>
+          ) : filteredProducts.length > 0 ? (
             filteredProducts.map((product) => (
               <ProductTableRow 
                 key={product.id}
@@ -147,18 +156,11 @@ const ProductTable: React.FC<ProductTableProps> = ({
           ) : (
             <tr>
               <td colSpan={9} className="px-4 sm:px-6 py-4 text-center text-gray-500">
-                {loading ? (
-                  <div className="flex justify-center items-center">
-                    <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-indigo-500 mr-2"></div>
-                    <span>Loading products...</span>
-                  </div>
-                ) : (
-                  <div className="py-8">
-                    <Package className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-                    <p className="text-base font-medium">No products found</p>
-                    <p className="text-sm mt-1">Try adjusting your search or filter criteria</p>
-                  </div>
-                )}
+                <div className="py-8">
+                  <Package className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+                  <p className="text-base font-medium">No products found</p>
+                  <p className="text-sm mt-1">Try adjusting your search or filter criteria</p>
+                </div>
               </td>
             </tr>
           )}

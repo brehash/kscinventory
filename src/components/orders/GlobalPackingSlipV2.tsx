@@ -662,32 +662,7 @@ const GlobalPackingSlipV2: React.FC = () => {
                             return (
                               <div key={order.id} className={`p-4 ${isProcessed ? 'bg-green-50' : 'bg-white'}`}>
                                 <div className="flex justify-between items-center mb-3">
-
                                   
-                                  {isProcessed ? (
-                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                      <CheckCircle className="h-3 w-3 mr-1" />
-                                      Ready
-                                    </span>
-                                  ) : (
-                                    <button
-                                      onClick={() => handleProcessOrder(order.id)}
-                                      disabled={isProcessing}
-                                      className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-                                    >
-                                      {isProcessing ? (
-                                        <>
-                                          <Loader2 className="animate-spin h-3 w-3 mr-1" />
-                                          Processing...
-                                        </>
-                                      ) : (
-                                        <>
-                                          <CheckSquare className="h-3 w-3 mr-1" />
-                                          Mark Ready
-                                        </>
-                                      )}
-                                    </button>
-                                  )}
                                 </div>
                                 
                                 {/* Order items */}

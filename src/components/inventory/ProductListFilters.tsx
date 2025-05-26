@@ -55,6 +55,12 @@ const ProductListFilters: React.FC<ProductListFiltersProps> = ({
     if (searchError) {
       setSearchError(null);
     }
+    
+    // Optionally implement immediate search without form submission
+    // This can make the search feel more responsive
+    if (e.target.value.length >= 3 || e.target.value === '') {
+      setSearchQuery(e.target.value);
+    }
   };
 
   const handleSearch = (e: React.FormEvent) => {
@@ -92,7 +98,7 @@ const ProductListFilters: React.FC<ProductListFiltersProps> = ({
 
   return (
     <div className="p-3 sm:p-4 border-b border-gray-200">
-      <div className="flex flex-col md:flex-row gap-3 sm:gap-4">
+      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
         <div className="relative flex-1">
           <form onSubmit={handleSearch} className="relative">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">

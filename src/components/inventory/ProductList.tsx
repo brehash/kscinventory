@@ -313,6 +313,7 @@ const ProductList: React.FC = () => {
     fetchProducts(0);
   };
 
+  // This effect will run when filter or sort settings change
   useEffect(() => {
     if (!loading) {
       setCurrentPage(0);
@@ -320,6 +321,16 @@ const ProductList: React.FC = () => {
       fetchProducts(0);
     }
   }, [selectedCategory, selectedLocation, selectedProvider, sortField, sortDirection]);
+
+  // This ensures search query changes trigger a refetch too
+  // Separate effect to avoid conflicts with the filter/sort effect
+  useEffect(() => {
+    if (!loading && searchQuery !== '') {
+      setCurrentPage(0);
+      setLastVisibleProduct(null);
+      fetchProducts(0);
+    }
+  }, [searchQuery]);
 
   const handleAddProduct = async (productData: Partial<Product>) => {
     if (!currentUser) return;
@@ -621,6 +632,7 @@ const ProductList: React.FC = () => {
           handleOpenEditModal={handleOpenEditModal}
           confirmDelete={confirmDelete}
           handleMoveItems={handleOpenMoveModal}
+          loading={loading}
         />
         
         {/* Pagination */}

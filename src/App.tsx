@@ -88,7 +88,7 @@ function App() {
               </ProtectedRoute>
             }
           >
-            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route index element={<Navigate to="/dashboard\" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
             
             {/* Products Routes */}
@@ -173,7 +173,7 @@ function App() {
                 </ProtectedRoute>
               }
             >
-              <Route index element={<Navigate to="/settings/locations" replace />} />
+              <Route index element={<Navigate to="/settings/locations\" replace />} />
               <Route path="locations" element={<LocationSettings />} />
               <Route path="categories" element={<CategorySettings />} />
               <Route path="product-types" element={<ProductTypeSettings />} />
@@ -183,7 +183,7 @@ function App() {
           </Route>
           
           {/* Fallback route */}
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<Navigate to="/\" replace />} />
         </Routes>
       </Router>
     </AuthProvider>

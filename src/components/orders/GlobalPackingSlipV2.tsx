@@ -662,14 +662,7 @@ const GlobalPackingSlipV2: React.FC = () => {
                             return (
                               <div key={order.id} className={`p-4 ${isProcessed ? 'bg-green-50' : 'bg-white'}`}>
                                 <div className="flex justify-between items-center mb-3">
-                                  <div className="flex items-center">
-                                    <h4 className="text-sm font-medium text-gray-900 mr-2">
-                                      Order #{order.orderNumber}
-                                    </h4>
-                                    <span className="text-xs text-gray-500">
-                                      {format(order.orderDate, 'MMM d, yyyy')}
-                                    </span>
-                                  </div>
+
                                   
                                   {isProcessed ? (
                                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">

@@ -584,7 +584,7 @@ const convertWooCommerceOrder = async (wcOrder: any): Promise<Omit<Order, 'id'>>
     tax,
     total,
     paymentMethod: wcOrder.payment_method || 'other',
-    notes: wcOrder.customer_note || undefined,
+    notes: wcOrder.customer_note || null, // Changed from undefined to null for Firestore compatibility
     source: 'woocommerce',
     woocommerceId: wcOrder.id,
     createdAt: new Date(),

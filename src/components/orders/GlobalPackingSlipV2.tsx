@@ -59,6 +59,36 @@ const GlobalPackingSlipV2: React.FC = () => {
   const [customerFilter, setCustomerFilter] = useState('');
   const [showCompletedOrders, setShowCompletedOrders] = useState(false);
   
+  // Function to format shipping address in the specified format
+  const formatShippingAddress = (address: any, phone: string, order: Order) => {
+    if (!address) return 'Address not available';
+    
+    // Get phone from billing if shipping phone is not available
+    const displayPhone = address.phone || phone || '';
+    
+    // Format address components
+    const fullName = `${address.firstName} ${address.lastName}`.trim();
+    const postalCode = address.postcode || '';
+    const city = address.city || '';
+    const state = address.state || '';
+    const addressLines = [address.address1 || '', address.address2 || ''].filter(Boolean).join(', ');
+    
+    // Only include total for COD orders
+    const isCOD = order.paymentMethod === 'cod' || order.paymentMethod === 'cash_on_delivery';
+    const totalAmount = isCOD ? `${order.total.toFixed(2)} RON` : '';
+    
+    // Format according to specification
+    return [
+      fullName,
+      displayPhone,
+      postalCode,
+      city,
+      state,
+      addressLines,
+      totalAmount
+    ].filter(Boolean).join(' | ');
+  };
+  
   // Fetch orders with items to pick
   useEffect(() => {
     const fetchOrders = async () => {
@@ -111,7 +141,7 @@ const GlobalPackingSlipV2: React.FC = () => {
               orders: [order],
               isProcessed: false,
               shippingAddress: order.shippingAddress,
-              phone: order.shippingAddress.phone
+              phone: order.shippingAddress.phone || order.billingAddress.phone
             });
           } else {
             const group = customersMap.get(customerKey)!;
@@ -587,24 +617,10 @@ const GlobalPackingSlipV2: React.FC = () => {
                                 <p className="text-sm text-gray-500">{group.orders.length} orders</p>
                               )}
                               
-                              {/* Address and contact info */}
-                              {group.shippingAddress && (
-                                <div className="mt-2 text-sm text-gray-500 flex items-start">
-                                  <Home className="h-4 w-4 mr-1 mt-0.5 flex-shrink-0" />
-                                  <div>
-                                    <div>{group.shippingAddress.address1}</div>
-                                    {group.shippingAddress.address2 && <div>{group.shippingAddress.address2}</div>}
-                                    <div>
-                                      {group.shippingAddress.city}, {group.shippingAddress.state} {group.shippingAddress.postcode}
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-                              
-                              {group.phone && (
-                                <div className="mt-1 text-sm text-gray-500 flex items-center">
-                                  <Phone className="h-4 w-4 mr-1 flex-shrink-0" />
-                                  {group.phone}
+                              {/* Address in the new format */}
+                              {group.orders[0] && group.shippingAddress && (
+                                <div className="mt-2 text-sm text-gray-500">
+                                  {formatShippingAddress(group.shippingAddress, group.phone || '', group.orders[0])}
                                 </div>
                               )}
                             </div>
@@ -761,14 +777,13 @@ const GlobalPackingSlipV2: React.FC = () => {
                 {orderGroups.map((group, i) => (
                   <div key={`print-customer-${i}`} className="mb-4 border p-4 rounded">
                     <h3 className="font-bold">{group.customerName}</h3>
-                    {group.shippingAddress && (
+                    
+                    {/* Formatted shipping address for print */}
+                    {group.orders[0] && group.shippingAddress && (
                       <p className="text-sm">
-                        {group.shippingAddress.address1}, 
-                        {group.shippingAddress.address2 ? `${group.shippingAddress.address2}, ` : ''} 
-                        {group.shippingAddress.city}, {group.shippingAddress.state} {group.shippingAddress.postcode}
+                        {formatShippingAddress(group.shippingAddress, group.phone || '', group.orders[0])}
                       </p>
                     )}
-                    {group.phone && <p className="text-sm">Phone: {group.phone}</p>}
                     
                     <table className="w-full mt-2">
                       <thead className="border-b">

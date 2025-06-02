@@ -19,26 +19,5 @@ export default defineConfig({
     // Define global variables that might be used by the WooCommerce package
     global: 'globalThis',
     'process.env': {},
-  },
-  build: {
-    // Ensure proper MIME types for JavaScript modules
-    rollupOptions: {
-      output: {
-        // Ensure chunks have proper format
-        format: 'es',
-        // Use standard extension for better MIME type detection
-        entryFileNames: 'assets/[name]-[hash].js',
-        chunkFileNames: 'assets/[name]-[hash].js',
-        assetFileNames: 'assets/[name]-[hash].[ext]'
-      }
-    },
-    // Ensure source maps are properly generated
-    sourcemap: true
-  },
-  server: {
-    // Ensure proper headers during development
-    headers: {
-      'Content-Type': 'application/javascript'
-    }
   }
 });
